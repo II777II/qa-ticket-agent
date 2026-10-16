@@ -9,7 +9,7 @@
 在 Jupyter / IPython 里内嵌显示（你要的 Python.display 方式）：
 
     from IPython.display import Image, display
-    from backend.runtime import create_runtime
+    from backend.application.runtime import create_runtime
 
     graph = create_runtime().graph
     display(Image(graph.get_graph().draw_mermaid_png()))        # 需要联网渲染
@@ -31,8 +31,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from backend.application.runtime import create_runtime
 from backend.infrastructure.config import PROJECT_ROOT
-from backend.runtime import create_runtime
 
 DOCS_DIR = PROJECT_ROOT / "docs"
 
@@ -209,7 +209,7 @@ def main() -> int:
     print(mermaid)
 
     if args.both_variants:
-        from backend.graph import build_graph
+        from backend.application.agent.graph import build_graph
 
         minimal = build_graph(llm=runtime.llm).get_graph()  # 不带工具与检索的最小图
         minimal_path = out_dir / "graph-minimal.mmd"

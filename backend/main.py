@@ -16,9 +16,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.application.chat import ChatService
+from backend.application.runtime import AgentRuntime, create_runtime
 from backend.domain import TicketRecord
 from backend.infrastructure.config import settings
-from backend.runtime import AgentRuntime, create_runtime
 from backend.schemas import (
     AgentInfoResponse,
     ChatRequest,
@@ -61,6 +62,11 @@ def get_runtime() -> AgentRuntime:
     return app.state.runtime
 
 
+def get_chat() -> ChatService:
+    """一次请求一个用例对象：它只持有运行时引用，没有自己的状态。"""
+    return ChatService(get_runtime())
+
+
 @app.get("/health", response_model=HealthResponse, summary="健康检查")
 async def health() -> HealthResponse:
     info = get_runtime().describe()
@@ -98,10 +104,10 @@ async def agent_info() -> AgentInfoResponse:
 
 @app.post("/chat", summary="流式对话（SSE）")
 async def chat(req: ChatRequest) -> StreamingResponse:
-    runtime = get_runtime()
+    chat_service = get_chat()
 
     async def event_stream():
-        async for event, payload in runtime.stream(req.message, req.thread_id):
+        async for event, payload in chat_service.stream(req.message, req.thread_id):
             yield sse(event, payload)
 
     return StreamingResponse(
@@ -137,16 +143,12 @@ async def list_tickets(
     contact: str | None = None,
     limit: int = 20,
 ) -> list[TicketRecord]:
-    store = get_runtime().store
-    if store is None:
-        return []
-    return store.list(status=status, contact=contact, limit=limit)
+    return get_runtime().tickets.list(status=status, contact=contact, limit=limit)
 
 
 @app.get("/api/tickets/{ticket_id}", response_model=TicketRecord, summary="工单详情")
 async def get_ticket(ticket_id: str) -> TicketRecord:
-    store = get_runtime().store
-    record = store.get(ticket_id) if store else None
+    record = get_runtime().tickets.find(ticket_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"工单不存在: {ticket_id}")
     return record

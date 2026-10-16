@@ -5,12 +5,13 @@ from __future__ import annotations
 import asyncio
 import json
 
-from backend.runtime import AgentRuntime
+from backend.application.chat import ChatService
+from backend.application.runtime import AgentRuntime
 
 
 async def _collect(runtime: AgentRuntime, message: str, thread: str) -> dict:
     collected = {"text": "", "tools": [], "tickets": [], "citations": [], "errors": []}
-    async for event, payload in runtime.stream(message, thread):
+    async for event, payload in ChatService(runtime).stream(message, thread):
         if event == "token":
             collected["text"] += payload["text"]
         elif event == "tool":

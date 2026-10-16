@@ -5,16 +5,17 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from backend.graph import AgentState, build_graph, route_after_agent
+from backend.application.agent import build_graph, create_tools
+from backend.application.agent.graph import AgentState, route_after_agent
+from backend.application.tickets import TicketService
 from backend.infrastructure.llm.mock import FakeChatModel
 from backend.infrastructure.persistence.json_store import JsonTicketStore
 from backend.infrastructure.retrieval.in_memory import CONTEXT_HEADER, InMemoryRetriever
-from backend.tools import create_tools
 
 
 def _build(store: JsonTicketStore, retriever=None):
     llm = FakeChatModel()
-    tools = create_tools(store)
+    tools = create_tools(TicketService(store))
     graph = build_graph(llm=llm, tools=tools, retriever=retriever, checkpointer=InMemorySaver())
     return graph, tools
 
@@ -59,7 +60,7 @@ def test_retrieved_fragments_recorded_in_state(store: JsonTicketStore, retriever
 
 def test_context_injected_into_system_prompt(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:
     """系统提示里必须带参考资料块，否则模型无从引用。"""
-    from backend.graph import _prepare_messages
+    from backend.application.agent.graph import _prepare_messages
 
     messages, citations = _prepare_messages([HumanMessage(content="账号被锁了怎么办")], retriever, "系统提示")
     assert isinstance(messages[0], SystemMessage)

@@ -7,8 +7,16 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from langchain_core.tools import BaseTool
+
+from backend.application.agent.tools import create_tools as _create_tools
+from backend.application.tickets import TicketService
 from backend.infrastructure.persistence.json_store import JsonTicketStore
-from backend.tools import create_tools
+
+
+def create_tools(store: JsonTicketStore) -> list[BaseTool]:
+    """测试适配：工具现在依赖工单用例，这里包一层，保持用例里的旧调用签名。"""
+    return _create_tools(TicketService(store))
 
 
 def _by_name(tools, name):

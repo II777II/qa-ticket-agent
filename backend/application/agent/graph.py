@@ -20,26 +20,8 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
+from backend.application.agent.prompts import SYSTEM_PROMPT
 from backend.infrastructure.retrieval.in_memory import format_context
-
-DEFAULT_SYSTEM_PROMPT = """你是企业 IT 服务台的智能助理，面向公司内部员工。
-
-行为准则：
-1. 优先基于知识库回答，不要编造公司内部流程、系统地址、审批权限。
-2. 信息不足时先追问关键细节（例如报错原文、影响范围、设备型号），不要瞎猜。
-3. 无法用知识库解决、或用户明确要求时，再帮他建工单，并把问题描述整理清楚。
-4. 回答用中文，简洁、分点、可执行。
-
-工具使用：
-- create_ticket：建单。标题、描述、分类、优先级、联系人五个字段都要来自用户的原话或已有历史，
-  联系人不明确就先问，不要用「未知」凑数；用户只是在咨询时不要建单。
-- query_ticket：查进度、催单。有单号按单号查，只说「我的工单」就按联系人查。
-- escalate_to_human：用户要求转人工，或问题确实超出你的能力范围时使用。
-- 不要把工具返回的 JSON 原样念给用户，也不要自己编造单号或状态。
-
-引用规范：
-- 系统消息里带【参考资料】时，回答要基于它，并在相应位置标出来源编号，例如「…（[1]）」。
-- 资料里没有的内容不要脑补；可以说明「知识库里没有这个流程」，再建议建工单。"""
 
 
 class AgentState(MessagesState):
@@ -114,7 +96,7 @@ def _to_citations(documents: Sequence[Document]) -> list[dict[str, Any]]:
 def build_agent_node(
     llm_with_tools: BaseChatModel,
     retriever: Any | None = None,
-    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+    system_prompt: str = SYSTEM_PROMPT,
 ) -> Callable[[AgentState], dict[str, Any]]:
     def agent_node(state: AgentState) -> dict[str, Any]:
         messages, citations = _prepare_messages(state["messages"], retriever, system_prompt)
@@ -129,7 +111,7 @@ def build_graph(
     tools: Sequence[BaseTool] = (),
     retriever: Any | None = None,
     checkpointer: Any | None = None,
-    system_prompt: str = DEFAULT_SYSTEM_PROMPT,
+    system_prompt: str = SYSTEM_PROMPT,
 ):
     """把模型、工具、检索器、记忆拼成一张可执行的图。"""
     tool_list = list(tools)

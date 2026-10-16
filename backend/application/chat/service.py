@@ -1,28 +1,22 @@
-"""应用装配层 + 统一流式出口。
+"""对话用例：驱动图执行，并把图内动作翻译成对外的领域事件。
 
-两件事：
-1. create_runtime()：调用各工厂，把 LLM、工具、检索器、记忆、工单存储拼成一个运行时。
-2. AgentRuntime.stream()：唯一的流式出口。HTTP 的 SSE 和命令行验收脚本都走这里，
-   保证「页面上看到的」和「命令行看到的」是同一套行为。
+一次问答的完整用例都在这里：调用图、把模型增量 / 工具调用 / 建单 / 引用
+翻译成 token、tool、ticket、citation 事件。HTTP 的 SSE 与命令行验收脚本消费同一套事件，
+所以「页面上看到的」和「命令行看到的」行为一致。
 
-阶段二接上 checkpointer、tools 与工单存储，阶段四接上 retriever——都只改这个文件。
+事件常量定义在 backend/schemas.py（接口层契约），这一层只负责产生事件，
+不负责编码成 SSE——那属于接口层。
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Iterator
+from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 
-from backend.graph import build_graph
 from backend.infrastructure.config import settings
-from backend.infrastructure.llm import create_llm
-from backend.infrastructure.memory import create_checkpointer
-from backend.infrastructure.persistence import create_ticket_store
-from backend.infrastructure.retrieval import create_retriever
 from backend.schemas import (
     EVENT_CITATION,
     EVENT_DONE,
@@ -32,9 +26,11 @@ from backend.schemas import (
     EVENT_TOKEN,
     EVENT_TOOL,
 )
-from backend.tools import create_tools
 
-logger = logging.getLogger("qa_ticket.runtime")
+if TYPE_CHECKING:  # 只用于类型标注，运行时不导入，避免与 runtime 形成循环
+    from backend.application.runtime import AgentRuntime
+
+logger = logging.getLogger("qa_ticket.chat")
 
 
 def _text_of(chunk: Any) -> str:
@@ -110,24 +106,17 @@ def _citation_events(update: Any, announced: set[str]) -> Iterator[tuple[str, di
             yield EVENT_CITATION, citation
 
 
-@dataclass
-class AgentRuntime:
-    """一次进程启动内共享的 Agent 运行时。"""
+class ChatService:
+    """一轮对话的用例入口。"""
 
-    graph: Any
-    llm: Any
-    tools: list[Any] = field(default_factory=list)
-    retriever: Any | None = None
-    checkpointer: Any | None = None
-    store: Any | None = None
+    def __init__(self, runtime: "AgentRuntime") -> None:
+        self._runtime = runtime
 
     async def stream(self, message: str, thread_id: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
-        """产出 (事件名, 载荷) 序列。
-
-        事件名与 schemas.py 里的常量一一对应，调用方只负责编码成 SSE 或打印。
+        """产出 (事件名, 载荷) 序列，供接口层编码成 SSE 或命令行直接打印。
 
         同时订阅两种流：messages 拿模型增量（吐 token、播报正在调用哪个工具），
-        updates 拿节点产出（工具返回结果、建单结果）。
+        updates 拿节点产出（工具返回结果、建单结果、检索引用）。
         """
         config = {"configurable": {"thread_id": thread_id}}
         yield EVENT_START, {
@@ -139,7 +128,7 @@ class AgentRuntime:
         announced: set[str] = set()
         citations_announced: set[str] = set()
         try:
-            async for mode, payload in self.graph.astream(
+            async for mode, payload in self._runtime.graph.astream(
                 {"messages": [HumanMessage(content=message)]},
                 config=config,
                 stream_mode=["messages", "updates"],
@@ -168,56 +157,3 @@ class AgentRuntime:
         except Exception as exc:  # 单轮失败不该拖垮服务，转成 error 事件交给前端
             logger.exception("对话失败")
             yield EVENT_ERROR, {"type": exc.__class__.__name__, "message": str(exc)}
-
-    def describe(self) -> dict[str, Any]:
-        return {
-            "provider": settings.llm_provider,
-            "mock": settings.mock_mode,
-            "model": settings.llm_model or "",
-            "tools": [getattr(tool, "name", str(tool)) for tool in self.tools],
-            "tickets": self.store.count() if self.store else 0,
-            "kb_documents": self.retriever.document_count() if hasattr(self.retriever, "document_count") else 0,
-            "kb_chunks": self.retriever.chunk_count() if hasattr(self.retriever, "chunk_count") else 0,
-            "checkpointer": settings.checkpointer if self.checkpointer else None,
-            "retriever": settings.retriever if self.retriever else None,
-            "ticket_store": settings.ticket_store if self.store else None,
-        }
-
-
-def create_runtime() -> AgentRuntime:
-    """按当前配置装配运行时。
-
-    阶段四：LLM + 工单工具 + 短期记忆 + JSON 工单存储 + 知识库检索（RAG）。
-    """
-    llm = create_llm()
-    checkpointer = create_checkpointer()
-    store = create_ticket_store()
-    tools = create_tools(store)
-    retriever = create_retriever()
-
-    graph = build_graph(
-        llm=llm,
-        tools=tools,
-        retriever=retriever,
-        checkpointer=checkpointer,
-    )
-    logger.info(
-        "Agent 运行时装配完成: %s",
-        {
-            "provider": settings.llm_provider,
-            "tools": [getattr(tool, "name", str(tool)) for tool in tools],
-            "checkpointer": settings.checkpointer,
-            "retriever": settings.retriever if retriever else None,
-            "kb_chunks": retriever.chunk_count() if hasattr(retriever, "chunk_count") else 0,
-            "ticket_store": settings.ticket_store,
-            "tickets": store.count(),
-        },
-    )
-    return AgentRuntime(
-        graph=graph,
-        llm=llm,
-        tools=tools,
-        retriever=retriever,
-        checkpointer=checkpointer,
-        store=store,
-    )

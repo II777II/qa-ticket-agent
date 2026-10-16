@@ -15,8 +15,9 @@ import argparse
 import asyncio
 import sys
 
+from backend.application.chat import ChatService
+from backend.application.runtime import AgentRuntime, create_runtime
 from backend.infrastructure.config import settings
-from backend.runtime import AgentRuntime, create_runtime
 from backend.schemas import (
     EVENT_CITATION,
     EVENT_DONE,
@@ -44,7 +45,7 @@ async def run_once(
     if show_prefix:
         print("\n助理 > ", end="", flush=True)
 
-    async for event, payload in runtime.stream(message, thread_id):
+    async for event, payload in ChatService(runtime).stream(message, thread_id):
         if event == EVENT_START:
             tag = "演示模式" if payload["mock"] else payload["provider"]
             print(f"[{tag}] ", end="", flush=True)
@@ -92,8 +93,7 @@ async def main() -> int:
     )
 
     if args.tickets:
-        store = runtime.store
-        records = store.list(limit=None) if store else []
+        records = runtime.tickets.list(limit=None)
         if not records:
             print("（还没有工单）")
         for record in records:

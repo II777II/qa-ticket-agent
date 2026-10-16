@@ -8,7 +8,7 @@ import json
 import httpx
 
 from backend import main as backend_main
-from backend.runtime import AgentRuntime
+from backend.application.runtime import AgentRuntime
 
 
 def _client() -> httpx.AsyncClient:
