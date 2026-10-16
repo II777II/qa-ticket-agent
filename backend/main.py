@@ -9,13 +9,19 @@ from __future__ import annotations
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from backend.config import settings
 from backend.runtime import AgentRuntime, create_runtime
-from backend.schemas import AgentInfoResponse, ChatRequest, HealthResponse, sse
+from backend.schemas import (
+    AgentInfoResponse,
+    ChatRequest,
+    HealthResponse,
+    TicketRecord,
+    sse,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +83,7 @@ async def agent_info() -> AgentInfoResponse:
         ticket_store=info["ticket_store"],
         model=info["model"],
         rag_top_k=settings.rag_top_k,
+        tickets=info["tickets"],
         extensions=[
             *[f"tool:{name}" for name in info["tools"]],
             "compose:docker/docker-compose.yml",
@@ -111,5 +118,27 @@ async def root() -> dict[str, str]:
         "docs": "/docs",
         "health": "/health",
         "chat": "POST /chat",
+        "tickets": "GET /api/tickets",
         "frontend": "阶段三：frontend/ (React + Ant Design X)",
     }
+
+
+@app.get("/api/tickets", response_model=list[TicketRecord], summary="工单列表（阶段三看板用）")
+async def list_tickets(
+    status: str | None = None,
+    contact: str | None = None,
+    limit: int = 20,
+) -> list[TicketRecord]:
+    store = get_runtime().store
+    if store is None:
+        return []
+    return store.list(status=status, contact=contact, limit=limit)
+
+
+@app.get("/api/tickets/{ticket_id}", response_model=TicketRecord, summary="工单详情")
+async def get_ticket(ticket_id: str) -> TicketRecord:
+    store = get_runtime().store
+    record = store.get(ticket_id) if store else None
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"工单不存在: {ticket_id}")
+    return record

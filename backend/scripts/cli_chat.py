@@ -51,9 +51,18 @@ async def run_once(
         elif event == EVENT_TOKEN:
             print(payload["text"], end="", flush=True)
         elif event == EVENT_TOOL:
-            print(f"\n  <工具> {payload.get('name')} {payload.get('detail', '')}", flush=True)
+            if payload.get("phase") == "call":
+                print(f"\n  <调用工具> {payload.get('name')}", flush=True)
+            else:
+                flag = "ok" if payload.get("ok") else "失败"
+                print(f"  <工具返回> {payload.get('name')} [{flag}] {payload.get('message', '')}", flush=True)
         elif event == EVENT_TICKET:
-            print(f"\n  <工单> {payload}", flush=True)
+            for ticket in payload.get("tickets", []):
+                print(
+                    f"  <工单> {ticket['id']} [{ticket['status']}] {ticket['title']}"
+                    f"（{ticket['category']}/{ticket['priority']}）",
+                    flush=True,
+                )
         elif event == EVENT_CITATION:
             print(f"\n  <引用> {payload.get('title')} ({payload.get('source', '')})", flush=True)
         elif event == EVENT_ERROR:
@@ -66,6 +75,7 @@ async def main() -> int:
     parser = argparse.ArgumentParser(description="问答工单 Agent 命令行验收")
     parser.add_argument("--once", metavar="QUESTION", help="只跑一轮就退出")
     parser.add_argument("--thread", default="cli", help="会话 ID（短期记忆按它隔离）")
+    parser.add_argument("--tickets", action="store_true", help="打印当前工单列表后退出")
     args = parser.parse_args()
 
     runtime = create_runtime()
@@ -73,8 +83,21 @@ async def main() -> int:
     print(
         f"provider={info['provider']}  model={info['model'] or '(内置)'}  "
         f"tools={len(info['tools'])}  memory={info['checkpointer'] or '未接入'}  "
+        f"tickets={info['tickets']}  "
         f"thread={args.thread}"
     )
+
+    if args.tickets:
+        store = runtime.store
+        records = store.list(limit=None) if store else []
+        if not records:
+            print("（还没有工单）")
+        for record in records:
+            print(
+                f"{record.id}  [{record.status}] {record.category}/{record.priority}  "
+                f"{record.title}  （{record.contact}，{record.created_at}）"
+            )
+        return 0
 
     if args.once:
         await run_once(runtime, args.once, args.thread, show_prefix=False)
