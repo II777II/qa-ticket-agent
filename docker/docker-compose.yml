@@ -1,0 +1,51 @@
+# ===============================================================
+# 部署升级接口（POC 阶段不跑 Docker，本地 uvicorn + npm run dev 即可）
+#
+# 升级路径：把下面注释掉的服务打开，同时改 .env 里对应的开关：
+#   CHECKPOINTER=postgres   长期记忆：MemorySaver -> PostgresSaver
+#   TICKET_STORE=postgres   工单：JSON 文件 -> Postgres 表
+#   RETRIEVER=pgvector      检索：进程内 -> pgvector 向量库
+# 代码侧不需要改，工厂会按这些开关创建对应实现。
+# ===============================================================
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    env_file:
+      - ../.env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "5179"
+    ports:
+      - "5179:5179"
+    restart: unless-stopped
+
+  # ---------- 以下为生产化升级占位，POC 不启用 ----------
+  # postgres:                      # 工单表 + LangGraph 长期记忆 + pgvector
+  #   image: pgvector/pgvector:pg16
+  #   environment:
+  #     POSTGRES_DB: qa_ticket
+  #     POSTGRES_USER: qa_ticket
+  #     POSTGRES_PASSWORD: change-me
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+
+  # redis:                         # 会话与热点缓存、异步任务队列
+  #   image: redis:7-alpine
+  #   ports:
+  #     - "6379:6379"
+
+  # frontend:                      # 阶段三产出 frontend/ 后补 Dockerfile.frontend
+  #   build:
+  #     context: ..
+  #     dockerfile: docker/Dockerfile.frontend
+  #   ports:
+  #     - "5173:80"
+  #   depends_on:
+  #     - backend
+
+# volumes:
+#   pgdata:

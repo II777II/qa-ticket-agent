@@ -1,0 +1,21 @@
+# ---------------------------------------------------------------
+# POC 依赖。刻意保持最小：只装到「对话 -> 编排 -> 模型」跑通为止。
+# ---------------------------------------------------------------
+
+# Web 层
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-dotenv>=1.0
+
+# 模型与编排：4 个扩展点的抽象接口都在 langchain-core / langgraph 里
+langchain-core>=0.3.30
+langchain-openai>=0.3.0
+langgraph>=0.2.60
+
+# ---------------------------------------------------------------
+# 生产化升级时再装（POC 不装，代码里已经留好工厂分支）
+#   langgraph-checkpoint-postgres>=2.0     -> CHECKPOINTER=postgres
+#   langchain-postgres>=0.0.12             -> RETRIEVER=pgvector
+#   sqlalchemy>=2.0 / psycopg[binary]>=3.2 -> TICKET_STORE=postgres
+#   redis>=5.0                             -> 会话与热点缓存
+# ---------------------------------------------------------------

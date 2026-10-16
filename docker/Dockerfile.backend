@@ -1,0 +1,19 @@
+# POC 阶段不强制上容器：本地 uvicorn 跑得更快。
+# 这个文件是给「后续 compose 升级」预留的落点，构建上下文是项目根目录。
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+
+# 依赖单独一层，改代码不用重装依赖
+COPY requirements.txt ./
+RUN pip install -r requirements.txt
+
+COPY backend ./backend
+
+EXPOSE 5179
+
+CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "5179"]
