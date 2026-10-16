@@ -3,14 +3,13 @@
 用一句话说清楚这件事：员工用日常语言描述问题 → Agent 先查知识库给答案并标出处 →
 知识库解决不了或用户明确要求时，自动整理字段建工单 → 之后能查进度、补信息、转人工。
 
-> 状态：阶段一、二（后端骨架 + LangGraph 编排 + 工具调用 + 短期记忆 + JSON 工单）已完成，
-> 前端与 RAG 按下面排期推进。
+> 状态：阶段一、二、三（后端链路 + 工单工具 + 前端对话页）已完成，RAG 与演示文档按排期推进。
 
 ## 技术选型
 
 | 层级 | 选型 | POC 实现 |
 | --- | --- | --- |
-| 前端 | React + TypeScript + Vite + Ant Design X | 阶段三 |
+| 前端 | React + TypeScript + Vite + Ant Design X | 已就绪（Bubble / Sender / ThoughtChain / Welcome） |
 | 后端 | Python 3.11 + FastAPI，SSE 流式 | 已就绪 |
 | 编排 | LangGraph StateGraph（只实现 Agent + Tool 两分支） | 已就绪 |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
@@ -42,12 +41,22 @@ python -m backend.scripts.cli_chat
 #   你 > TK-20261016-0001 帮我转人工
 python -m backend.scripts.cli_chat --tickets     # 看当前工单列表
 
-# 起 HTTP 服务：/docs 里有交互式接口文档
+# 后端：起 HTTP 服务（/docs 里有交互式接口文档）
 uvicorn backend.main:app --reload --port 5179
+
+# 前端：另开一个终端
+cd frontend
+npm install
+npm run dev            # 打开 http://127.0.0.1:5173
 ```
 
 接真实模型：`.env` 里把 `LLM_PROVIDER` 改成 `deepseek`（或 `openai`），填 `LLM_API_KEY`，
 `LLM_BASE_URL` 默认就是 `https://api.deepseek.com/v1`。
+
+前端 dev server 与后端同机：页面只访问 `127.0.0.1:5173`，`/chat` 与 `/api` 通过 Vite 代理转到
+`127.0.0.1:5179`（见 [frontend/vite.config.ts](frontend/vite.config.ts)）。浏览器始终同源，
+所以 SSE 不受 CORS 约束，后端的 `CORS_ORIGINS` 只作为「绕过代理直连后端」的兜底。
+想直连后端时，在前端目录建 `.env.local` 写 `VITE_API_BASE=http://127.0.0.1:5179` 即可。
 
 ## 接口
 
@@ -78,6 +87,15 @@ backend/
   scripts/cli_chat.py  命令行验收
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
   data/kb/             阶段四的知识库文档
+frontend/
+  vite.config.ts       代理到后端 + 固定 127.0.0.1（避开 localhost→::1 连不上的坑）
+  src/main.tsx         React 挂载 + antd 中文 locale + Ant Design X Provider
+  src/App.tsx          布局：顶部状态条 + 左侧对话 + 右侧工单面板
+  src/ChatPage.tsx     对话页：Bubble.List / Sender / ThoughtChain / Welcome / Prompts
+  src/TicketPanel.tsx  工单面板：列表 + 详情抽屉（含处理时间线）
+  src/hooks/useChat.ts 会话状态：消息列表、流式增量、工具事件合并
+  src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单查询
+  src/types.ts         与后端 schemas.py 对应的类型
 docker/                compose 升级落点（POC 不启用）
 ```
 
@@ -87,7 +105,7 @@ docker/                compose 升级落点（POC 不启用）
 | --- | --- | --- | --- |
 | 1 | 工程搭建 + LangGraph 最小图 | 命令行流式输出模型回答 | 已完成 |
 | 2 | 工具 + 短期记忆 + 工厂 | 多轮不丢上下文，工具可被调用，工单落 JSON | 已完成 |
-| 3 | 前端 Ant Design X | 页面能输入、流式显示、多轮对话 | 待办 |
+| 3 | 前端 Ant Design X | 页面能输入、流式显示、多轮对话 | 已完成 |
 | 4 | 简易 RAG + 引用 | 基于知识库作答并显示引用 | 待办 |
 | 5 | 联调 + README + 演示脚本 | 端到端可演示，含话术 | 待办 |
 
