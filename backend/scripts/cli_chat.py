@@ -16,9 +16,7 @@ import asyncio
 import sys
 
 from backend.application.chat import ChatService
-from backend.application.runtime import AgentRuntime, create_runtime
-from backend.infrastructure.config import settings
-from backend.schemas import (
+from backend.application.chat.events import (
     EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,
@@ -27,6 +25,8 @@ from backend.schemas import (
     EVENT_TOKEN,
     EVENT_TOOL,
 )
+from backend.application.runtime import AgentRuntime, create_runtime
+from backend.infrastructure.config import settings
 
 
 def _ensure_utf8_stdio() -> None:

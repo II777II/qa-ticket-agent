@@ -8,7 +8,7 @@
 # 终端 A：后端
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m uvicorn backend.main:app --reload --port 5179
+python -m uvicorn backend.api.app:app --reload --port 5179
 
 # 终端 B：前端
 cd E:\Code\chatgpt\qa-ticket-agent\frontend
@@ -21,7 +21,7 @@ npm run dev        # http://127.0.0.1:5173，/chat 与 /api 由 Vite 代理到 5
 
 ```powershell
 npm --prefix frontend run build          # 产出 frontend/dist
-python -m uvicorn backend.main:app --port 5179
+python -m uvicorn backend.api.app:app --port 5179
 # 浏览器打开 http://127.0.0.1:5179/     ← 首页就是前端，/docs 仍是接口文档
 ```
 
@@ -43,10 +43,10 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 | 目标 | 装什么 | 改 .env | 代码位置 |
 | --- | --- | --- | --- |
-| 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `factories/memory.py` 已留分支 |
-| 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 新增 `stores/postgres_store.py` 实现同名方法即可 |
-| 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | 新增 `retrievers/pgvector.py` |
-| 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `factories/llm.py` 加分支 |
+| 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `infrastructure/memory/factory.py` 已留分支 |
+| 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 新增 `infrastructure/persistence/postgres_store.py`，满足 `application/tickets/service.py` 的 `TicketStore` 协议 |
+| 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | 新增 `infrastructure/retrieval/pgvector.py` |
+| 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `infrastructure/llm/factory.py` 加分支 |
 | 会话缓存 / 限流 | `redis` | `REDIS_URL=...` | 新增 |
 
 每个分支现在都会抛一个说明性错误（告诉你缺哪个包、要开哪个服务），不会静默降级。

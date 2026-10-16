@@ -16,8 +16,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 
-from backend.infrastructure.config import settings
-from backend.schemas import (
+from backend.application.chat.events import (
     EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,
@@ -26,6 +25,7 @@ from backend.schemas import (
     EVENT_TOKEN,
     EVENT_TOOL,
 )
+from backend.infrastructure.config import settings
 
 if TYPE_CHECKING:  # 只用于类型标注，运行时不导入，避免与 runtime 形成循环
     from backend.application.runtime import AgentRuntime

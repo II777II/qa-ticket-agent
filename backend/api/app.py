@@ -1,0 +1,64 @@
+"""FastAPI 应用组装。
+
+只做「把应用拼起来」这几件事：生命周期、中间件、路由注册、可选的前端静态托管。
+具体路由在 api/routes/，请求响应模型在 api/schemas.py，业务在 application/——
+所以这个文件应当长期保持在这个体量。
+"""
+
+from __future__ import annotations
+
+import logging
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from backend.api.routes import chat as chat_routes
+from backend.api.routes import system as system_routes
+from backend.api.routes import tickets as ticket_routes
+from backend.application.runtime import create_runtime
+from backend.infrastructure.config import settings
+from backend.infrastructure.logging import setup_logging
+
+logger = logging.getLogger("qa_ticket.api")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.runtime = create_runtime()
+    logger.info("后端就绪: http://%s:%s/docs", settings.host, settings.port)
+    yield
+    app.state.runtime = None
+
+
+def create_app() -> FastAPI:
+    setup_logging()
+
+    app = FastAPI(
+        title="企业IT服务台 智能问答工单 Agent POC",
+        description="自然语言提问 -> RAG 知识库回答 -> 无法解决时自动建单。",
+        version="0.1.0",
+        lifespan=lifespan,
+    )
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(settings.cors_origins),
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    app.include_router(system_routes.router)
+    app.include_router(chat_routes.router)
+    app.include_router(ticket_routes.router)
+
+    # 前端构建产物存在时挂上静态资源（首页由 system 路由返回 index.html）；API 路由不受影响
+    assets_dir = settings.frontend_dist / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    return app
+
+
+app = create_app()

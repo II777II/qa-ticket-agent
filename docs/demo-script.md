@@ -11,7 +11,7 @@ Remove-Item backend\data\tickets.json -ErrorAction SilentlyContinue
 
 # 前端产物已构建时，后端一个地址全包：http://127.0.0.1:5179/
 npm --prefix frontend run build
-python -m uvicorn backend.main:app --port 5179
+python -m uvicorn backend.api.app:app --port 5179
 ```
 
 检查清单：

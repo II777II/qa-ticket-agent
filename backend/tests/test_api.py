@@ -7,12 +7,12 @@ import json
 
 import httpx
 
-from backend import main as backend_main
+from backend.api.app import app as api_app
 from backend.application.runtime import AgentRuntime
 
 
 def _client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(transport=httpx.ASGITransport(app=backend_main.app), base_url="http://testserver")
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=api_app), base_url="http://testserver")
 
 
 async def _get(path: str):
@@ -37,7 +37,7 @@ async def _stream_chat(message: str, thread_id: str, expect_status: int = 200) -
 
 def _prepare(runtime: AgentRuntime) -> None:
     """接口层靠 app.state.runtime 取运行时，测试里直接注入隔离版本。"""
-    backend_main.app.state.runtime = runtime
+    api_app.state.runtime = runtime
 
 
 def test_health(isolated_runtime: AgentRuntime) -> None:

@@ -27,7 +27,7 @@ python -m backend.scripts.draw_graph --png --html --both-variants
 
 ```python
 from IPython.display import Image, display
-from backend.runtime import create_runtime
+from backend.application.runtime import create_runtime
 
 graph = create_runtime().graph
 display(Image(graph.get_graph().draw_mermaid_png()))   # 联网渲染
@@ -68,7 +68,7 @@ flowchart TD
 
 工具就是**普通 Python 函数**，只是用 `@tool` 装饰并声明了参数 schema：模型在对话里决定调不调、调哪个，
 LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回到模型。三个工具都在
-`backend/tools.py`，由 `create_tools(store)` 按工单存储实例创建。
+`backend/application/agent/tools.py`，由 `create_tools(tickets)` 按工单用例创建。
 
 | 工具 | 作用 | 关键参数 | 什么时候会被调用 | 返回 |
 | --- | --- | --- | --- | --- |
@@ -85,17 +85,18 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 
 ## 分层与职责
 
-| 层 | 文件 | 职责 | 换实现的代价 |
+目录是四层（都在 `backend/` 下），对外常讲成五层——因为「表现层」是独立的 `frontend/`：
+
+| 五层说法 | 目录 | 职责 | 换实现的代价 |
 | --- | --- | --- | --- |
-| 配置 | `backend/config.py` | 所有开关集中在这里，业务代码不读环境变量 | 无 |
-| 工厂 | `backend/factories/*` | 按配置创建 LLM / 记忆 / 检索 / 工单存储 | 只加一个分支 |
-| 编排 | `backend/graph.py` | 状态、节点、条件边、检索注入、系统提示词 | 不改 |
-| 工具 | `backend/tools.py` | 三个 `@tool`，参数走 Pydantic 校验 | 不改 |
-| 存储 | `backend/stores/json_store.py` | 工单落盘、时间线、重复建单拦截 | 新写一个实现 |
-| 检索 | `backend/retrievers/memory.py` | 切块、打分、拼参考资料 | 新写一个实现 |
-| 装配 | `backend/runtime.py` | 拼装组件 + 唯一流式出口 | 只改这一个文件 |
-| 接口 | `backend/main.py` | HTTP/SSE、工单接口、可选同源托管前端 | 不改 |
-| 前端 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
+| 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
+| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（system / chat / tickets）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
+| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/`（graph / tools / prompts）；`chat/service.py`（一轮对话用例）；`tickets/service.py`（工单用例） | 加用例不改图 |
+| 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 枚举与状态流转/去重规则、`errors.py` 领域异常 | 不改 |
+| 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/` 的实现与工厂 | 只加一个分支 |
+
+依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
+领域层不 import FastAPI / LangChain；接口层不写业务规则。
 
 ## 一轮对话的执行路径
 
@@ -122,7 +123,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 
 | 扩展点 | POC 实现 | 抽象接口 | 生产替换 | 怎么换 |
 | --- | --- | --- | --- | --- |
-| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `factories/llm.py` 加分支 |
+| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/llm/factory.py` 加分支 |
 | 记忆 | `InMemorySaver`（进程内存） | `BaseCheckpointSaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 检索 | 关键词 IDF 打分 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |

@@ -43,7 +43,7 @@ python -m backend.scripts.cli_chat
 python -m backend.scripts.cli_chat --tickets     # 看当前工单列表
 
 # 后端：起 HTTP 服务（/docs 里有交互式接口文档）
-uvicorn backend.main:app --reload --port 5179
+uvicorn backend.api.app:app --reload --port 5179
 
 # 前端：另开一个终端
 cd frontend
@@ -55,7 +55,7 @@ npm run dev            # 打开 http://127.0.0.1:5173
 
 ```powershell
 npm --prefix frontend run build        # 产出 frontend/dist
-python -m uvicorn backend.main:app --port 5179
+python -m uvicorn backend.api.app:app --port 5179
 # 浏览器打开 http://127.0.0.1:5179/   ← 首页即前端；/docs 仍是接口文档
 ```
 
@@ -110,7 +110,7 @@ PNG 先试 mermaid.ink，失败就用本机 Chrome/Edge 离线渲染并裁掉空
 知识库是 `backend/data/kb/` 下的 5 篇 IT 服务台文档（VPN 报错、账号密码、打印机驱动、
 邮箱容量、工单 SLA），改了 `.md` 重启后端即生效；`README.md` 不会被当作知识读入。
 
-检索实现（[backend/retrievers/memory.py](backend/retrievers/memory.py)）刻意做成零依赖、可解释：
+检索实现（[backend/infrastructure/retrieval/in_memory.py](backend/infrastructure/retrieval/in_memory.py)）刻意做成零依赖、可解释：
 
 1. 按 Markdown 二级标题切小节（`# 标题` 当文档名，`## 小节` 当片段）；
 2. 查询与片段都按「英文单词 + 中文二元组」切词；
@@ -128,21 +128,28 @@ PNG 先试 mermaid.ink，失败就用本机 Chrome/Edge 离线渲染并裁掉空
 
 ```
 backend/
-  config.py            集中配置，决定用哪个实现
-  graph.py             LangGraph 编排（Agent + Tool，预留 P-E-V-S 扩展）
-  tools.py             三个 @tool：建单 / 查进度 / 转人工
-  schemas.py           SSE 事件与请求体定义
-  runtime.py           装配层 + 统一流式出口
-  main.py              FastAPI + SSE 接口
-  factories/           工厂：llm.py / memory.py(记忆) / store.py(工单存储)
-  stores/json_store.py 工单 JSON 存储
-  retrievers/memory.py 进程内检索（切块 + IDF 打分 + 拼参考资料）
-  factories/retriever.py 检索工厂（知识库为空时自动降级为不检索）
-  mock_llm.py          演示模式假模型
+  domain/              领域层：工单实体（models.py）、业务规则（rules.py）、领域异常（errors.py）
+  application/         应用层
+    runtime.py         装配：调工厂拼出运行时（不含业务动作）
+    agent/             Agent 关注点：graph.py（编排）、tools.py（工具适配）、prompts.py（提示词）
+    chat/service.py    用例：一轮对话（驱动图 + 翻译成 token/tool/ticket/citation 事件）
+    tickets/service.py 用例：建单 / 查进度 / 催单 / 转人工
+  infrastructure/      基础设施层
+    config.py          集中配置，决定用哪个实现
+    logging.py         日志初始化（手写 Handler，避免 basicConfig 静默失效）
+    llm/               模型工厂 + 演示模式假模型
+    memory/            短期记忆（checkpointer）工厂
+    retrieval/         进程内检索（切块 + IDF 打分 + 拼参考资料）与工厂
+    persistence/       工单 JSON 存储与工厂
+  api/                 接口层
+    app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
+    deps.py            依赖取用点（从 app.state 取运行时与用例）
+    routes/            chat.py / tickets.py / system.py
+    schemas.py         请求响应模型与 SSE 编码
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
-  data/kb/             阶段四的知识库文档
+  data/kb/             知识库文档
 frontend/
   vite.config.ts       代理到后端 + 固定 127.0.0.1（避开 localhost→::1 连不上的坑）
   src/main.tsx         React 挂载 + antd 中文 locale + Ant Design X Provider
@@ -178,8 +185,8 @@ docker/                compose 升级落点（POC 不启用）
 | `MemorySaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 进程内检索 | pgvector / Qdrant | `.env: RETRIEVER=pgvector` |
 | JSON 工单文件 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
-| 直连模型 | LiteLLM 网关 | `factories/llm.py` 加一个分支 |
-| `logging.basicConfig`（import 时改 root 的全局副作用） | 命名 logger + 自建 `Handler`/`Formatter` | `backend/main.py` |
+| 直连模型 | LiteLLM 网关 | `infrastructure/llm/factory.py` 加一个分支 |
+| ~~`logging.basicConfig`~~ | 已落地：手写 `Handler` + 判断注册 | `infrastructure/logging.py` |
 | 单进程 | Docker Compose | 打开 `docker/docker-compose.yml` 注释块 |
 
 关于日志这条，升级时要带两个保护：`if logger.handlers: return`——判断的是**要挂 handler 的那个 logger**，不是 root（`basicConfig` 恰好判 root，所以 root 一旦被 uvicorn / pytest 配过，它会静默失效）；命名 logger 自己挂了 handler 之后要设 `propagate = False`，否则 root 上的 handler 会把同一条日志再打一遍。配置要分开发/生产两套时，`dictConfig` + `disable_existing_loggers: False` 比手写更好维护。
