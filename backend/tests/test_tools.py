@@ -7,7 +7,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from backend.stores.json_store import JsonTicketStore
+from backend.infrastructure.persistence.json_store import JsonTicketStore
 from backend.tools import create_tools
 
 

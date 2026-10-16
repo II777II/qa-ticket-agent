@@ -17,12 +17,12 @@ from typing import Any, AsyncIterator, Iterator
 
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 
-from backend.config import settings
-from backend.factories.llm import create_llm
-from backend.factories.memory import create_checkpointer
-from backend.factories.retriever import create_retriever
-from backend.factories.store import create_ticket_store
 from backend.graph import build_graph
+from backend.infrastructure.config import settings
+from backend.infrastructure.llm import create_llm
+from backend.infrastructure.memory import create_checkpointer
+from backend.infrastructure.persistence import create_ticket_store
+from backend.infrastructure.retrieval import create_retriever
 from backend.schemas import (
     EVENT_CITATION,
     EVENT_DONE,

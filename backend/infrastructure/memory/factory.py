@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from backend.config import settings
+from backend.infrastructure.config import settings
 
 
 def create_checkpointer() -> BaseCheckpointSaver:

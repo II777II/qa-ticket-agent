@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from langchain_core.language_models import BaseChatModel
 
-from backend.config import settings
+from backend.infrastructure.config import settings
 
 DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1"
 PROVIDER_DEFAULT_MODEL = {
@@ -29,7 +29,7 @@ def create_llm() -> BaseChatModel:
     provider = settings.llm_provider
 
     if provider == "mock":
-        from backend.mock_llm import FakeChatModel
+        from backend.infrastructure.llm.mock import FakeChatModel
 
         return FakeChatModel()
 

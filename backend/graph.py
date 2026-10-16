@@ -20,7 +20,7 @@ from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
-from backend.retrievers.memory import format_context
+from backend.infrastructure.retrieval.in_memory import format_context
 
 DEFAULT_SYSTEM_PROMPT = """你是企业 IT 服务台的智能助理，面向公司内部员工。
 

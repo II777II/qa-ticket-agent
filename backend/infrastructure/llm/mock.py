@@ -32,7 +32,7 @@ from langchain_core.messages import (
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from pydantic import Field
 
-from backend.retrievers.memory import CONTEXT_FOOTER, CONTEXT_HEADER
+from backend.infrastructure.retrieval.in_memory import CONTEXT_FOOTER, CONTEXT_HEADER
 
 TEMPLATE = """【演示模式】当前没有可用的模型 API Key，这是一段占位回答，用来验证链路是否通畅。
 

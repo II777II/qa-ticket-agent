@@ -15,7 +15,7 @@ import argparse
 import asyncio
 import sys
 
-from backend.config import settings
+from backend.infrastructure.config import settings
 from backend.runtime import AgentRuntime, create_runtime
 from backend.schemas import (
     EVENT_CITATION,

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.config import settings
-from backend.retrievers.memory import (
+from backend.infrastructure.config import settings
+from backend.infrastructure.retrieval.in_memory import (
     CONTEXT_FOOTER,
     CONTEXT_HEADER,
     _split_sections,
@@ -67,7 +67,7 @@ def test_context_block_format(retriever) -> None:
 
 def test_empty_dir_degrades_to_no_chunks(tmp_path: Path) -> None:
     """知识库目录为空时不该报错，只是检不到（工厂会据此降级为不检索）。"""
-    from backend.retrievers.memory import InMemoryRetriever
+    from backend.infrastructure.retrieval.in_memory import InMemoryRetriever
 
     empty = InMemoryRetriever(docs_dir=tmp_path, top_k=3)
     assert empty.chunk_count() == 0

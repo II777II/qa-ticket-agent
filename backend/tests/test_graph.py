@@ -6,9 +6,9 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.checkpoint.memory import InMemorySaver
 
 from backend.graph import AgentState, build_graph, route_after_agent
-from backend.mock_llm import FakeChatModel
-from backend.retrievers.memory import CONTEXT_HEADER, InMemoryRetriever
-from backend.stores.json_store import JsonTicketStore
+from backend.infrastructure.llm.mock import FakeChatModel
+from backend.infrastructure.persistence.json_store import JsonTicketStore
+from backend.infrastructure.retrieval.in_memory import CONTEXT_HEADER, InMemoryRetriever
 from backend.tools import create_tools
 
 

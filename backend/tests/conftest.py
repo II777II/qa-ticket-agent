@@ -26,10 +26,10 @@ os.environ["RETRIEVER"] = "memory"
 os.environ["TICKET_STORE"] = "json"
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="qa-ticket-test-")
 
-from backend.retrievers.memory import InMemoryRetriever  # noqa: E402
-from backend.runtime import AgentRuntime, create_runtime  # noqa: E402
 from backend.domain import TicketCreate  # noqa: E402
-from backend.stores.json_store import JsonTicketStore  # noqa: E402
+from backend.infrastructure.persistence.json_store import JsonTicketStore  # noqa: E402
+from backend.infrastructure.retrieval.in_memory import InMemoryRetriever  # noqa: E402
+from backend.runtime import AgentRuntime, create_runtime  # noqa: E402
 
 
 @pytest.fixture()
@@ -40,7 +40,7 @@ def store(tmp_path: Path) -> JsonTicketStore:
 
 @pytest.fixture()
 def retriever() -> InMemoryRetriever:
-    from backend.config import settings
+    from backend.infrastructure.config import settings
 
     return InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
 
@@ -54,9 +54,9 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     """测试用运行时：工单写到指定文件，其余组件与生产完全一致。"""
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from backend.config import settings
     from backend.graph import build_graph
-    from backend.mock_llm import FakeChatModel
+    from backend.infrastructure.llm.mock import FakeChatModel
+    from backend.infrastructure.config import settings
     from backend.tools import create_tools
 
     llm = FakeChatModel()

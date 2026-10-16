@@ -18,7 +18,7 @@ from typing import Any
 from langchain_core.tools import BaseTool, tool
 
 from backend.domain import TicketCreate
-from backend.stores.json_store import JsonTicketStore
+from backend.infrastructure.persistence.json_store import JsonTicketStore
 
 
 def _dump(payload: dict[str, Any]) -> str:

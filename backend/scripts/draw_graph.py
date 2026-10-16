@@ -31,7 +31,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from backend.config import PROJECT_ROOT
+from backend.infrastructure.config import PROJECT_ROOT
 from backend.runtime import create_runtime
 
 DOCS_DIR = PROJECT_ROOT / "docs"

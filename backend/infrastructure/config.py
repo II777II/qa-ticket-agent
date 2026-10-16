@@ -17,7 +17,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-BACKEND_DIR = Path(__file__).resolve().parent
+# 本文件位于 backend/infrastructure/，包根要上跳一层，否则数据目录会指到 infrastructure/ 里
+BACKEND_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_DIR.parent
 
 # .env 放在项目根目录，进程启动时加载一次

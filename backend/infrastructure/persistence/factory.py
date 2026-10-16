@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from backend.config import settings
-from backend.stores.json_store import JsonTicketStore
+from backend.infrastructure.config import settings
+from backend.infrastructure.persistence.json_store import JsonTicketStore
 
 
 def create_ticket_store() -> JsonTicketStore:

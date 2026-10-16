@@ -9,8 +9,8 @@ import logging
 
 from langchain_core.retrievers import BaseRetriever
 
-from backend.config import settings
-from backend.retrievers.memory import InMemoryRetriever
+from backend.infrastructure.config import settings
+from backend.infrastructure.retrieval.in_memory import InMemoryRetriever
 
 logger = logging.getLogger("qa_ticket.factory.retriever")
 
