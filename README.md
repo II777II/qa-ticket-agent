@@ -80,6 +80,28 @@ python -m uvicorn backend.main:app --port 5179
 工单落在 `backend/data/tickets.json`（可用 `DATA_DIR` 指向别处）：建单用「临时文件 + 原子替换」
 写盘，同一联系人 + 同标题 + 未关闭的重复建单会被拦下、返回已有工单。
 
+## 测试
+
+```powershell
+python -m pytest            # 50 个用例，约 9 秒
+python -m pytest -v         # 看每个用例名
+```
+
+用例覆盖检索、工单存储、工具参数校验、LangGraph 编排、HTTP/SSE 接口与整链演示流程，
+固定使用演示模式与临时数据目录，**不联网、不依赖外部服务、不污染项目数据**。
+用例清单、边界用例与前端手工用例见 [docs/test-cases.md](docs/test-cases.md)。
+
+## 结构图
+
+```powershell
+python -m backend.scripts.draw_graph --png --html --both-variants
+```
+
+从运行时图导出（所以永远和 `build_graph()` 的实际结构一致）：终端 ASCII 图、`docs/graph.png`、
+`docs/graph.mmd`（Mermaid 源）、`docs/graph-minimal.mmd`（无工具的最小图对照）、`docs/graph.html`。
+在 Jupyter 里可以 `from IPython.display import Image, display; display(Image(graph.get_graph().draw_mermaid_png()))`，
+细节见 [docs/architecture.md](docs/architecture.md)。
+
 ## 知识库与检索（RAG）
 
 知识库是 `backend/data/kb/` 下的 5 篇 IT 服务台文档（VPN 报错、账号密码、打印机驱动、
@@ -115,6 +137,7 @@ backend/
   factories/retriever.py 检索工厂（知识库为空时自动降级为不检索）
   mock_llm.py          演示模式假模型
   scripts/cli_chat.py  命令行验收
+  scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
   data/kb/             阶段四的知识库文档
 frontend/
@@ -131,6 +154,7 @@ docs/
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
   interview-notes.md   30 秒陈述与高频追问应对
   deployment.md        三种跑法、compose 升级步骤、日志与排查
+  test-cases.md        50 个自动化用例 + 11 个前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
 ```
 

@@ -13,7 +13,7 @@ from __future__ import annotations
 import math
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
@@ -27,13 +27,23 @@ SUPPORTED_SUFFIXES = {".md", ".txt"}
 LATIN_WORD = re.compile(r"[a-zA-Z0-9_]{2,}")
 CJK = re.compile(r"[\u4e00-\u9fff]")
 
+# 虚词组成的二元组：命中它们不代表语义相关（「今天午饭吃什么」曾靠「什么」检到工单 SLA）
+STOP_BIGRAMS = frozenset(
+    {
+        "什么", "为什", "怎么", "怎样", "如何", "可以", "能否", "是否", "一下", "我们", "你们",
+        "他们", "这个", "那个", "这些", "那些", "比较", "还是", "就是", "有没有", "没有", "请问",
+        "帮我", "我的", "我要", "需要", "应该", "然后", "而且", "如果", "因为", "所以", "但是",
+    }
+)
+
 
 def _tokens(text: str) -> list[str]:
     """粗粒度分词：英文按单词，中文按二元组（不需要 jieba 之类的依赖）。"""
     lowered = text.lower()
-    result = LATIN_WORD.findall(lowered)
+    result = [word for word in LATIN_WORD.findall(lowered) if word not in STOP_BIGRAMS]
     cjk_chars = "".join(CJK.findall(lowered))
-    result.extend(cjk_chars[i : i + 2] for i in range(max(len(cjk_chars) - 1, 0)))
+    bigrams = (cjk_chars[i : i + 2] for i in range(max(len(cjk_chars) - 1, 0)))
+    result.extend(token for token in bigrams if token not in STOP_BIGRAMS)
     if len(cjk_chars) == 1:
         result.append(cjk_chars)
     return result
@@ -95,7 +105,11 @@ class InMemoryRetriever(BaseRetriever):
 
     docs_dir: Path = Field(description="知识库目录")
     top_k: int = Field(default=3, description="返回片段数")
-    min_score: float = Field(default=0.08, description="低于这个分数视为没检到")
+    min_score: float = Field(default=0.08, description="排序分下限，低于它视为没检到")
+    min_coverage: float = Field(
+        default=0.25,
+        description="查询词权重被命中的比例下限。只靠一两个通用词蒙中的片段会被挡掉",
+    )
 
     _chunks: list[_Chunk] = PrivateAttr(default_factory=list)
     _idf: dict[str, float] = PrivateAttr(default_factory=dict)
@@ -134,22 +148,34 @@ class InMemoryRetriever(BaseRetriever):
         return len(self._chunks)
 
     # ---------------- 检索 ----------------
-    def _score(self, query_tokens: list[str], chunk: _Chunk) -> float:
+    def _match(self, query_tokens: Sequence[str], chunk: _Chunk) -> tuple[float, float]:
+        """返回 (排序分, 覆盖率)。
+
+        排序分 = 命中权重 / sqrt(片段长度)，用于排序；
+        覆盖率 = 命中的查询词权重 / 查询词总权重，用于判断「是否真的在回答这个问题」——
+        长片段靠词多拿高分的毛病，和短查询靠一两个通用词蒙中的毛病，分别靠这两个量挡住。
+        """
         if not query_tokens:
-            return 0.0
+            return 0.0, 0.0
         counts: dict[str, int] = {}
         for token in chunk.tokens:
             counts[token] = counts.get(token, 0) + 1
 
         score = 0.0
+        hit_weight = 0.0
+        total_weight = 0.0
         for token in set(query_tokens):
+            weight = self._idf.get(token, 1.0)
+            total_weight += weight
             tf = counts.get(token, 0)
             if not tf:
                 continue
-            idf = self._idf.get(token, 1.0)
-            score += idf * (1 + math.log(tf))
+            score += weight * (1 + math.log(tf))
+            hit_weight += weight
+        if not total_weight:
+            return 0.0, 0.0
         # 除以长度平方根，避免长小节靠「词多」占便宜
-        return score / math.sqrt(chunk.length)
+        return score / math.sqrt(chunk.length), hit_weight / total_weight
 
     def _get_relevant_documents(
         self,
@@ -158,12 +184,15 @@ class InMemoryRetriever(BaseRetriever):
         run_manager: CallbackManagerForRetrieverRun | None = None,
     ) -> list[Document]:
         query_tokens = _tokens(query)
-        scored = [(self._score(query_tokens, chunk), chunk) for chunk in self._chunks]
-        scored = [(score, chunk) for score, chunk in scored if score >= self.min_score]
+        scored = []
+        for chunk in self._chunks:
+            score, coverage = self._match(query_tokens, chunk)
+            if score >= self.min_score and coverage >= self.min_coverage:
+                scored.append((score, coverage, chunk))
         scored.sort(key=lambda item: item[0], reverse=True)
 
         documents: list[Document] = []
-        for rank, (score, chunk) in enumerate(scored[: self.top_k], start=1):
+        for rank, (score, coverage, chunk) in enumerate(scored[: self.top_k], start=1):
             documents.append(
                 Document(
                     page_content=chunk.text,
@@ -172,6 +201,7 @@ class InMemoryRetriever(BaseRetriever):
                         "source": chunk.source,
                         "title": chunk.title,
                         "score": round(score, 4),
+                        "coverage": round(coverage, 4),
                     },
                 )
             )

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>问答工单 Agent · LangGraph 结构图</title>
+    <style>
+      body { font-family: system-ui, "Microsoft YaHei", sans-serif; margin: 32px; }
+      pre { background: #f6f8fa; padding: 16px; border-radius: 8px; overflow: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>问答工单 Agent · LangGraph 结构图</h1>
+    <p>由 <code>python -m backend.scripts.draw_graph --html</code> 从运行时图导出。</p>
+    <pre class="mermaid">---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	agent(agent)
+	tools(tools)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> agent;
+	agent -.-> __end__;
+	agent -.-> tools;
+	tools --> agent;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+</pre>
+    <h2>Mermaid 源文本</h2>
+    <pre>---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([&lt;p>__start__&lt;/p>]):::first
+	agent(agent)
+	tools(tools)
+	__end__([&lt;p>__end__&lt;/p>]):::last
+	__start__ --> agent;
+	agent -.-> __end__;
+	agent -.-> tools;
+	tools --> agent;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+</pre>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+    </script>
+  </body>
+</html>

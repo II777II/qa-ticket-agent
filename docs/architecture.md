@@ -1,5 +1,38 @@
 # 架构与执行路径
 
+## 运行时真实结构（脚本生成，非手绘）
+
+![LangGraph 结构图](graph.png)
+
+这张图是**从运行时代码里导出来的**，不是画出来的示意图——它永远和 `build_graph()` 的实际结构一致：
+
+```powershell
+python -m backend.scripts.draw_graph --png --html --both-variants
+```
+
+产物：
+
+| 文件 | 说明 |
+| --- | --- |
+| `docs/graph.png` | PNG 结构图（默认走 mermaid.ink 渲染，需要联网） |
+| `docs/graph.mmd` | Mermaid 源文本，粘到支持 Mermaid 的编辑器即可看 |
+| `docs/graph-minimal.mmd` | 对照用的最小图（无工具、无检索，退化成 Agent → END） |
+| `docs/graph.html` | 单页预览（浏览器打开，按需从 CDN 加载 mermaid） |
+| 终端 | ASCII 图（需要 `pip install grandalf`），内网无图形环境时最省事 |
+
+在 Jupyter / IPython 里内嵌显示：
+
+```python
+from IPython.display import Image, display
+from backend.runtime import create_runtime
+
+graph = create_runtime().graph
+display(Image(graph.get_graph().draw_mermaid_png()))   # 联网渲染
+print(graph.get_graph().draw_ascii())                  # 离线看结构
+```
+
+内网环境想让 PNG 完全离线渲染，装 `pyppeteer` 后把 `draw_method` 换成 `MermaidDrawMethod.PYPPETEER`；或者干脆用 `graph.mmd`。
+
 ## 整体结构
 
 ```mermaid
