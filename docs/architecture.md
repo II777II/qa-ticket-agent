@@ -33,26 +33,28 @@ print(graph.get_graph().draw_ascii())                  # 离线看结构
 
 内网环境想让 PNG 完全离线渲染，装 `pyppeteer` 后把 `draw_method` 换成 `MermaidDrawMethod.PYPPETEER`；或者干脆用 `graph.mmd`。
 
-## 整体结构
+## 图内节点与边
+
+只画 LangGraph 图里的节点与边，不掺业务组件（前端、FastAPI、知识库、存储的位置见下面「分层与职责」表）：
 
 ```mermaid
-flowchart TD
-    U[员工提问] --> FE[React + Ant Design X Bubble / Sender / ThoughtChain]
-    FE -->|POST /chat SSE| API[FastAPI 胶水层 main.py]
-    API --> RT[AgentRuntime runtime.py]
-    RT --> G[LangGraph StateGraph graph.py]
-    G --> A[agent 节点]
-    A -->|有 tool_calls| T[tools 节点 ToolNode]
+flowchart LR
+    S([__start__]) --> A[agent]
+    A -- 有 tool_calls --> T[tools]
+    A -- 无 tool_calls --> E([__end__])
     T --> A
-    A -->|无 tool_calls| E[END]
-    KB[(知识库 backend/data/kb)] --> R[InMemoryRetriever]
-    R --> A
-    A -.->|retrieved| RT
-    T -.->|ToolMessage| RT
-    RT -->|token / tool / ticket / citation| FE
-    CP[(MemorySaver thread_id 隔离)] --- G
-    ST[(工单存储 JSON / Postgres)] --- T
 ```
+
+| 元素 | 谁定义的 | 说明 |
+| --- | --- | --- |
+| `__start__` / `__end__` | LangGraph 内置 | 入口与出口，编译时自动注入 |
+| `agent` | 本项目（`graph.py`） | 检索 → 拼系统提示 → 调模型；产出 `tool_calls` 或最终回答 |
+| `tools` | `langgraph.prebuilt.ToolNode` | 执行工具并把结果作为 `ToolMessage` 写回状态 |
+| `agent → tools` / `agent → __end__` | 本项目（`route_after_agent`） | 同一条条件边：有 `tool_calls` 走工具，否则结束 |
+| `tools → agent` | 本项目 | 固定回边，工具执行完回到模型重新总结 |
+
+没有工具可用时（阶段一的空工具表），`tools` 节点与条件边都不注册，图退化成 `__start__ → agent → __end__`，
+对照见 `docs/graph-minimal.mmd`。
 
 ## 分层与职责
 
