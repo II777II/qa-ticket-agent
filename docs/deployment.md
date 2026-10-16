@@ -1,0 +1,67 @@
+# 运行与部署
+
+## 三种跑法
+
+### 1. 开发：前后端分离（推荐日常改代码）
+
+```powershell
+# 终端 A：后端
+conda activate qa-ticket
+cd E:\Code\chatgpt\qa-ticket-agent
+python -m uvicorn backend.main:app --reload --port 5179
+
+# 终端 B：前端
+cd E:\Code\chatgpt\qa-ticket-agent\frontend
+npm run dev        # http://127.0.0.1:5173，/chat 与 /api 由 Vite 代理到 5179
+```
+
+浏览器只跟 5173 说话（同源），所以 SSE 不受 CORS 约束；后端 `CORS_ORIGINS` 只作绕过代理直连时的兜底。
+
+### 2. 演示：后端同源托管（一个地址，最稳）
+
+```powershell
+npm --prefix frontend run build          # 产出 frontend/dist
+python -m uvicorn backend.main:app --port 5179
+# 浏览器打开 http://127.0.0.1:5179/     ← 首页就是前端，/docs 仍是接口文档
+```
+
+后端启动时检测到 `frontend/dist` 就托管它（`/` 返回首页、`/assets/*` 返回静态资源）。
+产物不存在时 `/` 会返回一段 JSON 说明，方便判断是不是忘了构建。
+换目录用 `FRONTEND_DIST` 环境变量指定。
+
+### 3. 单机容器：Docker Compose（已预留，POC 未启用）
+
+```powershell
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+`docker/docker-compose.yml` 里 backend 服务可直接用，postgres + pgvector、redis、独立前端是注释块。
+
+## 生产化升级的具体步骤
+
+代码不需要改，只改配置 + 装依赖 + 打开对应服务：
+
+| 目标 | 装什么 | 改 .env | 代码位置 |
+| --- | --- | --- | --- |
+| 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `factories/memory.py` 已留分支 |
+| 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 新增 `stores/postgres_store.py` 实现同名方法即可 |
+| 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | 新增 `retrievers/pgvector.py` |
+| 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `factories/llm.py` 加分支 |
+| 会话缓存 / 限流 | `redis` | `REDIS_URL=...` | 新增 |
+
+每个分支现在都会抛一个说明性错误（告诉你缺哪个包、要开哪个服务），不会静默降级。
+
+## 日志与排查
+
+- 日志走标准输出，用 `logging.basicConfig` 的格式：`时间 级别 logger - 消息`。
+- 关键日志点：知识库加载（文档数/片段数）、工单读写（新建/重复拦截）、运行时装配（各扩展点实现）、单轮失败（error 事件同时写日志）。
+- 后端被重定向到文件时中文可能乱码（Windows 默认 GBK）：用 `PYTHONIOENCODING=utf-8` 启动，或直接看控制台输出。
+- 常见问题：
+
+| 现象 | 原因 | 处理 |
+| --- | --- | --- |
+| `/` 返回 JSON 而不是页面 | 还没构建前端 | `npm --prefix frontend run build` 后重启后端 |
+| 5173 打不开 | Vite 未启动（或首次预打包较慢） | `npm run dev`，等 `ready` 后再打开 |
+| `localhost:端口` 连不上 | 服务只绑了 IPv4，而 localhost 先解析到 `::1` | 用 `127.0.0.1` 访问 |
+| 回答里没有引用 | 知识库为空或低于 `min_score` | 看启动日志的知识库统计，调 `RAG_TOP_K` / 文档措辞 |
+| 前端提示「连不上后端」 | 后端未启动或端口不对 | 起后端；同源托管模式下确认访问的是后端端口 |

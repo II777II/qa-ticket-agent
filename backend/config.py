@@ -83,6 +83,10 @@ class Settings:
     kb_dir: Path = field(
         default_factory=lambda: Path(_env("KB_DIR", str(BACKEND_DIR / "data" / "kb")))
     )
+    # 前端构建产物：存在时后端直接同源托管，现场演示只开一个地址（默认 5179）
+    frontend_dist: Path = field(
+        default_factory=lambda: Path(_env("FRONTEND_DIST", str(PROJECT_ROOT / "frontend" / "dist")))
+    )
 
     # ---------- RAG ----------
     rag_top_k: int = _env_int("RAG_TOP_K", 3)

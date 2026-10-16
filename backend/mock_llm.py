@@ -320,7 +320,8 @@ class FakeChatModel(BaseChatModel):
         for head, body in documents:
             label = head.split("]")[0].lstrip("[")
             title = head.split("]", 1)[-1].strip()
-            parts.append(f"【{label}】{title}\n{_condense(body)}")
+            # 用与提示词一致的 [n] 标注，前端和真实模型的输出格式才是同一套
+            parts.append(f"[{label}] {title}\n{_condense(body)}")
         return (
             f"【演示模式】我从知识库里检到 {len(documents)} 段参考资料，按资料整理如下"
             f"（问题：{question}）：\n\n"

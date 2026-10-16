@@ -3,7 +3,8 @@
 用一句话说清楚这件事：员工用日常语言描述问题 → Agent 先查知识库给答案并标出处 →
 知识库解决不了或用户明确要求时，自动整理字段建工单 → 之后能查进度、补信息、转人工。
 
-> 状态：阶段一~四（后端链路 + 工单工具 + 前端对话页 + RAG 引用）已完成，剩下联调与演示文档。
+> 状态：五个阶段全部完成——后端链路、工单工具、前端对话页、RAG 引用、演示文档与联调。
+> 文档见 [docs/](docs/architecture.md)：架构与执行路径、演示脚本与话术、追问应对、运行与部署。
 
 ## 技术选型
 
@@ -48,6 +49,14 @@ uvicorn backend.main:app --reload --port 5179
 cd frontend
 npm install
 npm run dev            # 打开 http://127.0.0.1:5173
+```
+
+现场演示想只开一个地址（也更稳，不依赖 Vite）：
+
+```powershell
+npm --prefix frontend run build        # 产出 frontend/dist
+python -m uvicorn backend.main:app --port 5179
+# 浏览器打开 http://127.0.0.1:5179/   ← 首页即前端；/docs 仍是接口文档
 ```
 
 接真实模型：`.env` 里把 `LLM_PROVIDER` 改成 `deepseek`（或 `openai`），填 `LLM_API_KEY`，
@@ -117,6 +126,11 @@ frontend/
   src/hooks/useChat.ts 会话状态：消息列表、流式增量、工具事件合并
   src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单查询
   src/types.ts         与后端 schemas.py 对应的类型
+docs/
+  architecture.md      架构图、执行路径、SSE 事件表、扩展点与生产替换
+  demo-script.md       3 分钟演示分镜、准备清单、兜底预案
+  interview-notes.md   30 秒陈述与高频追问应对
+  deployment.md        三种跑法、compose 升级步骤、日志与排查
 docker/                compose 升级落点（POC 不启用）
 ```
 
@@ -128,7 +142,7 @@ docker/                compose 升级落点（POC 不启用）
 | 2 | 工具 + 短期记忆 + 工厂 | 多轮不丢上下文，工具可被调用，工单落 JSON | 已完成 |
 | 3 | 前端 Ant Design X | 页面能输入、流式显示、多轮对话 | 已完成 |
 | 4 | 简易 RAG + 引用 | 基于知识库作答并显示引用 | 已完成 |
-| 5 | 联调 + README + 演示脚本 | 端到端可演示，含话术 | 待办 |
+| 5 | 联调 + README + 演示脚本 | 端到端可演示，含话术 | 已完成 |
 
 ## 生产化升级路径（POC 只预留，不实现）
 

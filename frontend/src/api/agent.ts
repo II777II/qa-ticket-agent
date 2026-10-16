@@ -139,9 +139,11 @@ function dispatch(
       break;
     case "citation":
       handlers.onCitation?.({
+        index: Number(payload.index ?? 0),
         title: String(payload.title ?? ""),
         source: String(payload.source ?? ""),
         snippet: optionalText(payload.snippet),
+        score: typeof payload.score === "number" ? payload.score : undefined,
       });
       break;
     case "done":

@@ -1,6 +1,8 @@
 """FastAPI 胶水层。
 
-只做三件事：装配运行时、把 Agent 的流式输出转成 SSE、暴露健康检查。
+只做四件事：装配运行时、把 Agent 的流式输出转成 SSE、暴露健康检查与工单接口、
+以及（可选）同源托管前端构建产物——`frontend/dist` 存在时访问 `/` 就是前端首页，
+现场演示只开一个地址，也顺便绕开跨域。
 编排逻辑在 graph.py，模型接入在 factories/llm.py，这一层刻意保持薄。
 """
 
@@ -11,7 +13,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings
 from backend.runtime import AgentRuntime, create_runtime
@@ -113,15 +116,18 @@ async def chat(req: ChatRequest) -> StreamingResponse:
     )
 
 
-@app.get("/", summary="服务说明")
-async def root() -> dict[str, str]:
+@app.get("/", summary="前端首页（已构建时）或服务说明")
+async def root():
+    index = settings.frontend_dist / "index.html"
+    if index.is_file():
+        return FileResponse(index)
     return {
         "name": "qa-ticket-agent",
         "docs": "/docs",
         "health": "/health",
         "chat": "POST /chat",
         "tickets": "GET /api/tickets",
-        "frontend": "阶段三：frontend/ (React + Ant Design X)",
+        "frontend": "还没构建。开发用 npm run dev (5173)，演示用 npm run build 后由本服务托管",
     }
 
 
@@ -144,3 +150,9 @@ async def get_ticket(ticket_id: str) -> TicketRecord:
     if record is None:
         raise HTTPException(status_code=404, detail=f"工单不存在: {ticket_id}")
     return record
+
+
+# 前端构建产物存在时挂上静态资源；API 路由在上面，不受影响（/docs 也照常可用）
+_assets_dir = settings.frontend_dist / "assets"
+if _assets_dir.is_dir():
+    app.mount("/assets", StaticFiles(directory=_assets_dir), name="assets")
