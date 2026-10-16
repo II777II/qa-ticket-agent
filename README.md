@@ -75,6 +75,9 @@ docker/                compose 升级落点（POC 不启用）
 | 进程内检索 | pgvector / Qdrant | `.env: RETRIEVER=pgvector` |
 | JSON 工单文件 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
 | 直连模型 | LiteLLM 网关 | `factories/llm.py` 加一个分支 |
+| `logging.basicConfig`（import 时改 root 的全局副作用） | 命名 logger + 自建 `Handler`/`Formatter` | `backend/main.py` |
 | 单进程 | Docker Compose | 打开 `docker/docker-compose.yml` 注释块 |
+
+关于日志这条，升级时要带两个保护：`if logger.handlers: return`——判断的是**要挂 handler 的那个 logger**，不是 root（`basicConfig` 恰好判 root，所以 root 一旦被 uvicorn / pytest 配过，它会静默失效）；命名 logger 自己挂了 handler 之后要设 `propagate = False`，否则 root 上的 handler 会把同一条日志再打一遍。配置要分开发/生产两套时，`dictConfig` + `disable_existing_loggers: False` 比手写更好维护。
 
 权限（RBAC）、Redis 缓存、异步任务、监控告警属于生产化范围，POC 不落代码。
