@@ -99,6 +99,9 @@ python -m backend.scripts.draw_graph --png --html --both-variants
 
 从运行时图导出（所以永远和 `build_graph()` 的实际结构一致）：终端 ASCII 图、`docs/graph.png`、
 `docs/graph.mmd`（Mermaid 源）、`docs/graph-minimal.mmd`（无工具的最小图对照）、`docs/graph.html`。
+图上的标注也是从运行时读出来的——`agent` 节点会写明「检索知识库 (RAG) → 拼进系统提示 → 调模型」，
+`tools` 节点会列出实际注册的工具名，条件边会标出 `有/无 tool_calls`。
+PNG 先试 mermaid.ink，失败就用本机 Chrome/Edge 离线渲染并裁掉空白（`--local` 可强制离线）。
 在 Jupyter 里可以 `from IPython.display import Image, display; display(Image(graph.get_graph().draw_mermaid_png()))`，
 细节见 [docs/architecture.md](docs/architecture.md)。
 

@@ -18,12 +18,12 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
-	agent(agent)
-	tools(tools)
+	agent["agent<br/>检索知识库 (RAG)<br/>命中片段拼进系统提示<br/>llm.bind_tools().invoke()"]
+	tools["tools<br/>create_ticket / query_ticket / escalate_to_human"]
 	__end__([<p>__end__</p>]):::last
 	__start__ --> agent;
-	agent -.-> __end__;
-	agent -.-> tools;
+	agent -.->|无 tool_calls| __end__;
+	agent -.->|有 tool_calls| tools;
 	tools --> agent;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
@@ -37,20 +37,21 @@ config:
 ---
 graph TD;
 	__start__([&lt;p>__start__&lt;/p>]):::first
-	agent(agent)
-	tools(tools)
+	agent["agent&lt;br/>检索知识库 (RAG)&lt;br/>命中片段拼进系统提示&lt;br/>llm.bind_tools().invoke()"]
+	tools["tools&lt;br/>create_ticket / query_ticket / escalate_to_human"]
 	__end__([&lt;p>__end__&lt;/p>]):::last
 	__start__ --> agent;
-	agent -.-> __end__;
-	agent -.-> tools;
+	agent -.->|无 tool_calls| __end__;
+	agent -.->|有 tool_calls| tools;
 	tools --> agent;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
 </pre>
-    <script type="module">
-      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-      mermaid.initialize({ startOnLoad: true, theme: "neutral" });
+    <script src="vendor/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({{ startOnLoad: false, theme: "neutral" }});
+      mermaid.run({{ querySelector: ".mermaid" }});
     </script>
   </body>
 </html>

@@ -17,6 +17,9 @@ dist/
 # 运行时数据（工单 JSON 会随对话变化，不入库）
 backend/data/tickets.json
 
+# 画图脚本从 node_modules 复制过来的 mermaid（可再生，不入库）
+docs/vendor/
+
 # 编辑器 / 系统
 .vscode/
 .idea/

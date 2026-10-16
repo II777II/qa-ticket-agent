@@ -14,11 +14,14 @@ python -m backend.scripts.draw_graph --png --html --both-variants
 
 | 文件 | 说明 |
 | --- | --- |
-| `docs/graph.png` | PNG 结构图（默认走 mermaid.ink 渲染，需要联网） |
+| `docs/graph.png` | PNG 结构图。先试 mermaid.ink，失败则用本机 Chrome/Edge 离线渲染并裁掉空白（`--local` 可强制离线） |
 | `docs/graph.mmd` | Mermaid 源文本，粘到支持 Mermaid 的编辑器即可看 |
 | `docs/graph-minimal.mmd` | 对照用的最小图（无工具、无检索，退化成 Agent → END） |
 | `docs/graph.html` | 单页预览（浏览器打开，按需从 CDN 加载 mermaid） |
 | 终端 | ASCII 图（需要 `pip install grandalf`），内网无图形环境时最省事 |
+
+图上会带上「agent 内部做了什么（含 RAG）」与「tools 里有哪些工具」，两处标注都是从运行时读出来的。
+离线渲染截图需要 `pillow` 裁空白边框（没装就保留原始尺寸）。
 
 在 Jupyter / IPython 里内嵌显示：
 
@@ -38,9 +41,11 @@ print(graph.get_graph().draw_ascii())                  # 离线看结构
 只画 LangGraph 图里的节点与边，不掺业务组件（前端、FastAPI、知识库、存储的位置见下面「分层与职责」表）：
 
 ```mermaid
-flowchart LR
-    S([__start__]) --> A[agent]
+flowchart TD
+    S([__start__]) --> A
+    A["agent<br/>检索知识库 (RAG)<br/>命中片段拼进系统提示<br/>llm.bind_tools().invoke()"]
     A -- 有 tool_calls --> T[tools]
+    T["tools<br/>create_ticket / query_ticket / escalate_to_human"]
     A -- 无 tool_calls --> E([__end__])
     T --> A
 ```
@@ -48,13 +53,35 @@ flowchart LR
 | 元素 | 谁定义的 | 说明 |
 | --- | --- | --- |
 | `__start__` / `__end__` | LangGraph 内置 | 入口与出口，编译时自动注入 |
-| `agent` | 本项目（`graph.py`） | 检索 → 拼系统提示 → 调模型；产出 `tool_calls` 或最终回答 |
-| `tools` | `langgraph.prebuilt.ToolNode` | 执行工具并把结果作为 `ToolMessage` 写回状态 |
+| `agent` | 本项目（`graph.py`） | 四步：取用户消息 → **检索知识库（RAG）** → 命中片段拼进系统提示 → `llm.bind_tools().invoke()`；产出 `tool_calls` 或最终回答 |
+| `tools` | `langgraph.prebuilt.ToolNode` | 执行工具并把结果作为 `ToolMessage` 写回状态。里面装的正是下面三个工具 |
 | `agent → tools` / `agent → __end__` | 本项目（`route_after_agent`） | 同一条条件边：有 `tool_calls` 走工具，否则结束 |
 | `tools → agent` | 本项目 | 固定回边，工具执行完回到模型重新总结 |
 
 没有工具可用时（阶段一的空工具表），`tools` 节点与条件边都不注册，图退化成 `__start__ → agent → __end__`，
 对照见 `docs/graph-minimal.mmd`。
+
+上面的节点标注不是手写的：`draw_graph.py` 会从运行时读出「agent 是否接入检索」「tools 里注册了哪些工具」，
+再写进图里，所以图和代码不会各说各话。
+
+## 工具是什么
+
+工具就是**普通 Python 函数**，只是用 `@tool` 装饰并声明了参数 schema：模型在对话里决定调不调、调哪个，
+LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回到模型。三个工具都在
+`backend/tools.py`，由 `create_tools(store)` 按工单存储实例创建。
+
+| 工具 | 作用 | 关键参数 | 什么时候会被调用 | 返回 |
+| --- | --- | --- | --- | --- |
+| `create_ticket` | 建单 | `title` / `description` / `category`（6 类枚举）/ `priority`（4 档枚举）/ `contact` | 知识库解决不了、或用户明确要求建单 | `{ok, duplicated, ticket}` |
+| `query_ticket` | 查进度、催单 | `ticket_id` / `contact` / `urge` | 用户问「处理到哪了」「催一下」「我的工单」 | `{ok, tickets[], message}` |
+| `escalate_to_human` | 转人工 | `ticket_id` / `reason` | 用户要求转人工、或超出能力范围 | `{ok, ticket}` |
+
+三个工具共同的设计：
+
+- **参数用 Pydantic 约束**：分类与优先级是 `Literal` 枚举，会变成工具参数 JSON Schema 里的 `enum`，模型编不出「服务器坏了」这种值；
+- **校验失败交给模型自纠**：不合法参数抛 `ValidationError`，`ToolNode` 默认把错误转成 `ToolMessage` 回给模型让它改参数重试，而不是整轮失败；
+- **返回值统一是 JSON 字符串**：模型读得懂，`runtime.py` 也能解析出工单号推给前端；`ok=False` 时由模型组织成人话，不把原始 JSON 念给用户；
+- **写操作有幂等兜底**：同一联系人 + 同标题 + 未关闭的重复建单，存储层直接返回已有工单。
 
 ## 分层与职责
 

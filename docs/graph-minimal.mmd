@@ -5,7 +5,7 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
-	agent(agent)
+	agent["agent<br/>未接入检索<br/>命中片段拼进系统提示<br/>llm.bind_tools().invoke()"]
 	__end__([<p>__end__</p>]):::last
 	__start__ --> agent;
 	agent --> __end__;

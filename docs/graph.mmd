@@ -5,12 +5,12 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
-	agent(agent)
-	tools(tools)
+	agent["agent<br/>检索知识库 (RAG)<br/>命中片段拼进系统提示<br/>llm.bind_tools().invoke()"]
+	tools["tools<br/>create_ticket / query_ticket / escalate_to_human"]
 	__end__([<p>__end__</p>]):::last
 	__start__ --> agent;
-	agent -.-> __end__;
-	agent -.-> tools;
+	agent -.->|无 tool_calls| __end__;
+	agent -.->|有 tool_calls| tools;
 	tools --> agent;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
