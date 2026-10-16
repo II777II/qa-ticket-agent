@@ -17,12 +17,12 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import settings
+from backend.domain import TicketRecord
 from backend.runtime import AgentRuntime, create_runtime
 from backend.schemas import (
     AgentInfoResponse,
     ChatRequest,
     HealthResponse,
-    TicketRecord,
     sse,
 )
 

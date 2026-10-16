@@ -28,7 +28,7 @@ os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="qa-ticket-test-")
 
 from backend.retrievers.memory import InMemoryRetriever  # noqa: E402
 from backend.runtime import AgentRuntime, create_runtime  # noqa: E402
-from backend.schemas import TicketCreate  # noqa: E402
+from backend.domain import TicketCreate  # noqa: E402
 from backend.stores.json_store import JsonTicketStore  # noqa: E402
 
 

@@ -17,12 +17,8 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from backend.schemas import (
-    TICKET_STATUSES,
-    TicketCreate,
-    TicketEvent,
-    TicketRecord,
-)
+from backend.domain.models import TicketCreate, TicketEvent, TicketRecord
+from backend.domain.rules import duplicate_of, next_ticket_id, validate_status
 
 logger = logging.getLogger("qa_ticket.store")
 
@@ -78,14 +74,7 @@ class JsonTicketStore:
         os.replace(tmp, self.path)  # 原子替换，避免半截文件
 
     def _next_id(self) -> str:
-        today = datetime.now().strftime("%Y%m%d")
-        prefix = f"TK-{today}-"
-        used = [
-            int(tid.rsplit("-", 1)[1])
-            for tid in self._tickets
-            if tid.startswith(prefix) and tid.rsplit("-", 1)[1].isdigit()
-        ]
-        return f"{prefix}{max(used) + 1 if used else 1:04d}"
+        return next_ticket_id(self._tickets)
 
     # ---------------- 读 ----------------
     def get(self, ticket_id: str) -> TicketRecord | None:
@@ -117,13 +106,9 @@ class JsonTicketStore:
         免得模型多轮重复调用把工单表刷爆。
         """
         with self._lock:
-            for record in self._tickets.values():
-                if (
-                    record.contact.lower() == payload.contact.strip().lower()
-                    and record.title.strip() == payload.title.strip()
-                    and record.status != "已关闭"
-                ):
-                    return record, True
+            existing = duplicate_of(list(self._tickets.values()), payload)
+            if existing is not None:
+                return existing, True
 
             now = _now()
             record = TicketRecord(
@@ -156,8 +141,8 @@ class JsonTicketStore:
             record = self._tickets.get(ticket_id.strip().upper())
             if record is None:
                 return None
-            if status is not None and status not in TICKET_STATUSES:
-                raise ValueError(f"未知工单状态: {status!r}，可选 {TICKET_STATUSES}")
+            if status is not None:
+                validate_status(status)
 
             now = _now()
             record.events.append(TicketEvent(at=now, action=action, note=note, actor=actor))

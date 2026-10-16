@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.schemas import TicketCreate
+from backend.domain import TicketCreate, UnknownStatusError
 from backend.stores.json_store import JsonTicketStore
 
 
@@ -51,7 +51,8 @@ def test_add_event_appends_timeline_and_status(store: JsonTicketStore, sample_ti
 
 def test_invalid_status_rejected(store: JsonTicketStore, sample_ticket: TicketCreate) -> None:
     record, _ = store.create(sample_ticket)
-    with pytest.raises(ValueError):
+    # 领域层把非法状态也类型化了，不再是裸 ValueError
+    with pytest.raises(UnknownStatusError):
         store.add_event(record.id, "乱改状态", status="随便写个状态")
 
 
