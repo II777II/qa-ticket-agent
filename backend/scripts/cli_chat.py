@@ -64,7 +64,11 @@ async def run_once(
                     flush=True,
                 )
         elif event == EVENT_CITATION:
-            print(f"\n  <引用> {payload.get('title')} ({payload.get('source', '')})", flush=True)
+            print(
+                f"  <引用 [{payload.get('index')}]> {payload.get('source')} · {payload.get('title')}"
+                f"（score={payload.get('score')}）",
+                flush=True,
+            )
         elif event == EVENT_ERROR:
             print(f"\n[错误] {payload['type']}: {payload['message']}", file=sys.stderr, flush=True)
         elif event == EVENT_DONE:

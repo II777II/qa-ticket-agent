@@ -20,9 +20,11 @@ from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
 from backend.config import settings
 from backend.factories.llm import create_llm
 from backend.factories.memory import create_checkpointer
+from backend.factories.retriever import create_retriever
 from backend.factories.store import create_ticket_store
 from backend.graph import build_graph
 from backend.schemas import (
+    EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,
     EVENT_START,
@@ -87,6 +89,27 @@ def _tool_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
                 yield EVENT_TICKET, {"tickets": tickets}
 
 
+def _citation_events(update: Any, announced: set[str]) -> Iterator[tuple[str, dict[str, Any]]]:
+    """把 agent 节点写回的检索结果转成 citation 事件。
+
+    一轮里 agent 可能被调用两次（先决定调工具、再总结），检索结果会重复出现，
+    所以用「来源 + 小节标题」去重，避免前端把同一段引用显示两遍。
+    """
+    if not isinstance(update, dict):
+        return
+    for node_output in update.values():
+        if not isinstance(node_output, dict):
+            continue
+        for citation in node_output.get("retrieved") or []:
+            if not isinstance(citation, dict):
+                continue
+            key = f"{citation.get('source')}::{citation.get('title')}"
+            if key in announced:
+                continue
+            announced.add(key)
+            yield EVENT_CITATION, citation
+
+
 @dataclass
 class AgentRuntime:
     """一次进程启动内共享的 Agent 运行时。"""
@@ -114,6 +137,7 @@ class AgentRuntime:
         }
 
         announced: set[str] = set()
+        citations_announced: set[str] = set()
         try:
             async for mode, payload in self.graph.astream(
                 {"messages": [HumanMessage(content=message)]},
@@ -137,6 +161,8 @@ class AgentRuntime:
                 elif mode == "updates":
                     for event, data in _tool_events(payload):
                         yield event, data
+                    for event, data in _citation_events(payload, citations_announced):
+                        yield event, data
 
             yield EVENT_DONE, {"thread_id": thread_id}
         except Exception as exc:  # 单轮失败不该拖垮服务，转成 error 事件交给前端
@@ -150,6 +176,8 @@ class AgentRuntime:
             "model": settings.llm_model or "",
             "tools": [getattr(tool, "name", str(tool)) for tool in self.tools],
             "tickets": self.store.count() if self.store else 0,
+            "kb_documents": self.retriever.document_count() if hasattr(self.retriever, "document_count") else 0,
+            "kb_chunks": self.retriever.chunk_count() if hasattr(self.retriever, "chunk_count") else 0,
             "checkpointer": settings.checkpointer if self.checkpointer else None,
             "retriever": settings.retriever if self.retriever else None,
             "ticket_store": settings.ticket_store if self.store else None,
@@ -159,14 +187,13 @@ class AgentRuntime:
 def create_runtime() -> AgentRuntime:
     """按当前配置装配运行时。
 
-    阶段二：LLM + 三个工单工具 + 短期记忆 checkpointer + JSON 工单存储。
-    阶段四：再接上 create_retriever()，RAG 与引用生效。
+    阶段四：LLM + 工单工具 + 短期记忆 + JSON 工单存储 + 知识库检索（RAG）。
     """
     llm = create_llm()
     checkpointer = create_checkpointer()
     store = create_ticket_store()
     tools = create_tools(store)
-    retriever = None  # 阶段四：create_retriever()
+    retriever = create_retriever()
 
     graph = build_graph(
         llm=llm,
@@ -180,6 +207,8 @@ def create_runtime() -> AgentRuntime:
             "provider": settings.llm_provider,
             "tools": [getattr(tool, "name", str(tool)) for tool in tools],
             "checkpointer": settings.checkpointer,
+            "retriever": settings.retriever if retriever else None,
+            "kb_chunks": retriever.chunk_count() if hasattr(retriever, "chunk_count") else 0,
             "ticket_store": settings.ticket_store,
             "tickets": store.count(),
         },

@@ -7,6 +7,9 @@
 阶段二起它还负责模拟工具调用：识别到「建单 / 查进度 / 转人工」的意图就先返回
 tool_calls，拿到工具结果后再用自然语言复述结论——没有 Key 也能演示完整闭环。
 真实模型换上来时，这段规则判断会被模型自己的意图识别替代，其余代码不用动。
+
+阶段四起它会读系统提示里的【参考资料】块：检索命中时基于资料作答并标出 [1][2]，
+这样 RAG 链路（检索 → 注入 → 引用回传）在没有 Key 的演示模式下也是真的。
 """
 
 from __future__ import annotations
@@ -28,6 +31,8 @@ from langchain_core.messages import (
 )
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from pydantic import Field
+
+from backend.retrievers.memory import CONTEXT_FOOTER, CONTEXT_HEADER
 
 TEMPLATE = """【演示模式】当前没有可用的模型 API Key，这是一段占位回答，用来验证链路是否通畅。
 
@@ -131,6 +136,43 @@ def _guess_contact(text: str) -> str:
 
 def _tool_call(name: str, args: dict[str, Any]) -> AIMessage:
     return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"call_mock_{name}", "type": "tool_call"}])
+
+
+def _context_documents(messages: Sequence[BaseMessage]) -> list[tuple[str, str]]:
+    """从系统提示里抽出【参考资料】块，返回 [(标注行, 正文), ...]。"""
+    for message in messages:
+        if not isinstance(message, SystemMessage):
+            continue
+        text = _as_text(message.content)
+        if CONTEXT_HEADER not in text:
+            continue
+        block = text.split(CONTEXT_HEADER, 1)[1].split(CONTEXT_FOOTER, 1)[0]
+        documents: list[tuple[str, str]] = []
+        head, buffer = "", []
+        for line in block.splitlines():
+            if line.startswith("[") and "]" in line:
+                if head:
+                    documents.append((head, "\n".join(buffer).strip()))
+                head, buffer = line.strip(), []
+            elif line.strip():
+                buffer.append(line.strip())
+        if head:
+            documents.append((head, "\n".join(buffer).strip()))
+        return documents
+    return []
+
+
+def _condense(text: str, limit: int = 160) -> str:
+    """把命中片段压成几行，模拟模型「读完资料再总结」的效果。"""
+    cleaned = " ".join(line.strip() for line in text.splitlines() if line.strip())
+    if len(cleaned) <= limit:
+        return cleaned
+    cut = cleaned[:limit]
+    for mark in ("。", "；", "！", ". ", ";"):
+        position = cut.rfind(mark)
+        if position > limit // 2:
+            return cut[: position + 1]
+    return cut + "…"
 
 
 class FakeChatModel(BaseChatModel):
@@ -265,7 +307,27 @@ class FakeChatModel(BaseChatModel):
                 "还没有工单的话，说一声我先帮你建一张。"
             )
 
+        documents = _context_documents(messages)
+        if documents:
+            return self._compose_from_context(question, documents)
+
         return TEMPLATE.format(question=question)
+
+    @staticmethod
+    def _compose_from_context(question: str, documents: list[tuple[str, str]]) -> str:
+        """基于检索到的资料作答——真实模型做的就是这件事。"""
+        parts = []
+        for head, body in documents:
+            label = head.split("]")[0].lstrip("[")
+            title = head.split("]", 1)[-1].strip()
+            parts.append(f"【{label}】{title}\n{_condense(body)}")
+        return (
+            f"【演示模式】我从知识库里检到 {len(documents)} 段参考资料，按资料整理如下"
+            f"（问题：{question}）：\n\n"
+            + "\n\n".join(parts)
+            + "\n\n以上内容来自知识库文档，右侧/下方会列出引用出处。"
+            "把 .env 里的 LLM_PROVIDER 换成 deepseek 或 openai 后，这里会换成真实模型组织的回答。"
+        )
 
     @staticmethod
     def _compose_after_tool(tool_message: ToolMessage) -> str:

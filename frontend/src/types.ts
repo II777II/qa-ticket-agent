@@ -15,11 +15,13 @@ export interface ToolEvent {
   message?: string;
 }
 
-/** 阶段四 RAG 用；现在后端还没发这类事件 */
+/** RAG 引用：模型这句回答的依据来自哪篇文档的哪一小节 */
 export interface CitationEvent {
+  index: number;
   title: string;
   source: string;
   snippet?: string;
+  score?: number;
 }
 
 export interface ErrorEvent {

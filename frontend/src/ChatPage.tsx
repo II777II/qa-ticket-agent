@@ -71,8 +71,10 @@ export default function ChatPage({ onTicketEvent, onOpenTicket, mock }: ChatPage
               </Space>
             ))}
             {message.citations.map((citation) => (
-              <Text key={`${citation.title}-${citation.source}`} type="secondary">
-                引用：{citation.title}（{citation.source}）
+              <Text key={`${citation.source}-${citation.title}`} type="secondary" style={{ fontSize: 12 }}>
+                <Tag color="geekblue">[{citation.index}]</Tag>
+                {citation.source} · {citation.title}
+                {citation.score !== undefined && <Text type="secondary">（相关度 {citation.score}）</Text>}
               </Text>
             ))}
           </Space>

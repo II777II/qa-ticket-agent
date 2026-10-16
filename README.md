@@ -3,7 +3,7 @@
 用一句话说清楚这件事：员工用日常语言描述问题 → Agent 先查知识库给答案并标出处 →
 知识库解决不了或用户明确要求时，自动整理字段建工单 → 之后能查进度、补信息、转人工。
 
-> 状态：阶段一、二、三（后端链路 + 工单工具 + 前端对话页）已完成，RAG 与演示文档按排期推进。
+> 状态：阶段一~四（后端链路 + 工单工具 + 前端对话页 + RAG 引用）已完成，剩下联调与演示文档。
 
 ## 技术选型
 
@@ -15,7 +15,7 @@
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
 | 工具调用 | `create_ticket` / `query_ticket` / `escalate_to_human` | 已就绪 |
-| 简易 RAG | 进程内检索 + 3~5 篇文档 + 引用 | 阶段四 |
+| 简易 RAG | 进程内检索 + 5 篇文档 + 引用 | 已就绪 |
 | 工单存储 | JSON 文件（`backend/data/tickets.json`） | 已就绪 |
 | 部署 | 本地 uvicorn + `npm run dev`；Docker Compose 预留 | docker/ 目录已放好落点 |
 
@@ -64,12 +64,31 @@ npm run dev            # 打开 http://127.0.0.1:5173
 | --- | --- | --- |
 | POST | `/chat` | 流式对话（SSE）。事件类型：`start` / `token` / `tool` / `ticket` / `citation`(阶段四) / `done` / `error` |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
-| GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、预留的 compose 落点） |
+| GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
 | GET | `/api/tickets` | 工单列表，支持 `status` / `contact` / `limit` 过滤（阶段三看板用） |
 | GET | `/api/tickets/{id}` | 工单详情，含时间线 |
 
 工单落在 `backend/data/tickets.json`（可用 `DATA_DIR` 指向别处）：建单用「临时文件 + 原子替换」
 写盘，同一联系人 + 同标题 + 未关闭的重复建单会被拦下、返回已有工单。
+
+## 知识库与检索（RAG）
+
+知识库是 `backend/data/kb/` 下的 5 篇 IT 服务台文档（VPN 报错、账号密码、打印机驱动、
+邮箱容量、工单 SLA），改了 `.md` 重启后端即生效；`README.md` 不会被当作知识读入。
+
+检索实现（[backend/retrievers/memory.py](backend/retrievers/memory.py)）刻意做成零依赖、可解释：
+
+1. 按 Markdown 二级标题切小节（`# 标题` 当文档名，`## 小节` 当片段）；
+2. 查询与片段都按「英文单词 + 中文二元组」切词；
+3. 用 IDF 加权词频打分，除以片段长度平方根（防止长小节占便宜），取 `RAG_TOP_K`（默认 3）条；
+4. 低于 `min_score` 视为没检到——此时不注入任何资料，模型会说「知识库里没有这个流程」。
+
+命中的片段以 `【参考资料】` 块拼进系统提示，同时把出处通过 `citation` 事件回传前端，
+回答里标 `[1][2]` 对应片段。参考资料**不进消息历史**，所以多轮对话不会被旧资料撑爆。
+
+这套关键词检索的短板很直接：换个说法（同义词）就可能检不到，长问题也容易被高频词带偏。
+生产环境换成「向量检索 + 关键词混合 + 重排」，只要实现 LangChain 的 `BaseRetriever`
+并把 `.env` 改成 `RETRIEVER=pgvector`，`graph.py` 与工具层都不用动。
 
 ## 目录结构
 
@@ -83,6 +102,8 @@ backend/
   main.py              FastAPI + SSE 接口
   factories/           工厂：llm.py / memory.py(记忆) / store.py(工单存储)
   stores/json_store.py 工单 JSON 存储
+  retrievers/memory.py 进程内检索（切块 + IDF 打分 + 拼参考资料）
+  factories/retriever.py 检索工厂（知识库为空时自动降级为不检索）
   mock_llm.py          演示模式假模型
   scripts/cli_chat.py  命令行验收
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
@@ -106,7 +127,7 @@ docker/                compose 升级落点（POC 不启用）
 | 1 | 工程搭建 + LangGraph 最小图 | 命令行流式输出模型回答 | 已完成 |
 | 2 | 工具 + 短期记忆 + 工厂 | 多轮不丢上下文，工具可被调用，工单落 JSON | 已完成 |
 | 3 | 前端 Ant Design X | 页面能输入、流式显示、多轮对话 | 已完成 |
-| 4 | 简易 RAG + 引用 | 基于知识库作答并显示引用 | 待办 |
+| 4 | 简易 RAG + 引用 | 基于知识库作答并显示引用 | 已完成 |
 | 5 | 联调 + README + 演示脚本 | 端到端可演示，含话术 | 待办 |
 
 ## 生产化升级路径（POC 只预留，不实现）

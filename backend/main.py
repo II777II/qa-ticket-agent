@@ -84,6 +84,8 @@ async def agent_info() -> AgentInfoResponse:
         model=info["model"],
         rag_top_k=settings.rag_top_k,
         tickets=info["tickets"],
+        kb_documents=info["kb_documents"],
+        kb_chunks=info["kb_chunks"],
         extensions=[
             *[f"tool:{name}" for name in info["tools"]],
             "compose:docker/docker-compose.yml",
