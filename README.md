@@ -5,7 +5,8 @@
 
 > 状态：五个阶段全部完成——后端链路、工单工具、前端对话页、RAG 引用、演示文档与联调。
 > 文档见 [docs/](docs/architecture.md)：架构与执行路径、演示脚本与话术、追问应对、运行与部署。
-> 当前分支 `langgraph-native` 使用 `StreamWriter + custom`；`sse-abstract` 保留状态投影版本。
+> 当前分支 `langgraph-native` 使用 `StreamWriter + custom` 和 FastAPI 内置 SSE；
+> `sse-abstract` 保留状态投影与手写 SSE 编码版本。
 
 ## 技术选型
 
@@ -140,7 +141,7 @@ python -m uvicorn backend.api.app:app --port 5179
 ## 测试
 
 ```powershell
-python -m pytest            # 101 个用例，约 12 秒
+python -m pytest            # 102 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 

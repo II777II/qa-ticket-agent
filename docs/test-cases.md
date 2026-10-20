@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（101 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、检索、存储、工具、接口与整链；
+- **自动化用例**（102 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 101 passed in ~12s
+python -m pytest              # 102 passed in ~12s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -93,6 +93,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-12 | 业务草稿 SSE | 问包含订单号、换货、联系人的售后问题 | 收到 `service_draft`，四个槽位完整，ready=true，未写工单 |
 | A-13 | 确认后建单 | 提交 `/branch/service/confirm` | 200，返回 TK 单号并新增工单；重复提交返回原工单 |
 | A-14 | 无效订单拒绝 | 提交不存在的订单号 | 404，不创建工单 |
+| A-15 | 内置 SSE 响应头 | 请求任一 SSE 分支 | `Content-Type=text/event-stream`，`X-Accel-Buffering=no` |
 
 ## 六、整链（`test_chat_flow.py`）
 

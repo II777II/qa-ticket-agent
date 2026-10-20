@@ -162,6 +162,27 @@ def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
     assert "[1]" in "".join(payload["text"] for name, payload in events if name == "token")
 
 
+def test_builtin_event_source_response_headers(isolated_runtime: AgentRuntime) -> None:
+    """FastAPI EventSourceResponse 应设置 SSE Content-Type 和代理禁缓冲头。"""
+    _prepare(isolated_runtime)
+
+    async def inspect_headers() -> tuple[str, str]:
+        async with _client() as client:
+            async with client.stream(
+                "POST",
+                "/branch/fallback",
+                json={"message": "你好", "thread_id": "sse-headers"},
+            ) as response:
+                return (
+                    response.headers["content-type"],
+                    response.headers["x-accel-buffering"],
+                )
+
+    content_type, buffering = asyncio.run(inspect_headers())
+    assert content_type.startswith("text/event-stream")
+    assert buffering == "no"
+
+
 def test_chat_does_not_create_tickets(isolated_runtime: AgentRuntime) -> None:
     """对话侧不再提供售后工单工具。"""
     _prepare(isolated_runtime)

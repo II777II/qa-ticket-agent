@@ -1,14 +1,11 @@
-"""接口层数据结构：HTTP 请求体 / 响应体 + SSE 编码。
+"""接口层数据结构：HTTP 请求体与响应体。
 
 事件名本身（start / intent / token / order / service_draft / citation / done / error）定义在
-application/chat/events.py——那是应用层与接口层之间的契约；这里只负责把
-「事件名 + 载荷」编码成 SSE 报文。
+application/chat/events.py；SSE 报文由 FastAPI 内置 EventSourceResponse 与
+ServerSentEvent 编码。
 """
 
 from __future__ import annotations
-
-import json
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -44,11 +41,6 @@ class AgentInfoResponse(HealthResponse):
     git_sha: str = ""
     git_date: str = ""
     extensions: list[str] = Field(default_factory=list)
-
-
-def sse(event: str, data: dict[str, Any]) -> str:
-    """把一次事件编码成 SSE 报文。"""
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 class CitationPayload(BaseModel):

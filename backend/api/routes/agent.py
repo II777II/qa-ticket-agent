@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from typing import AsyncIterator
+
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import EventSourceResponse
+from fastapi.sse import ServerSentEvent
 
 from backend.api.deps import get_chat, get_runtime
 from backend.api.schemas import ChatRequest, ServiceConfirmRequest, ServiceConfirmResponse
-from backend.api.streaming import stream_response
+from backend.api.streaming import stream_events
 from backend.application.chat import ChatService
 from backend.application.runtime import AgentRuntime
 from backend.domain import TicketCreate
@@ -15,28 +18,31 @@ from backend.domain import TicketCreate
 router = APIRouter(prefix="/branch", tags=["agent-routes"])
 
 
-@router.post("/knowledge", summary="知识库问答分支（SSE）")
+@router.post("/knowledge", summary="知识库问答分支（SSE）", response_class=EventSourceResponse)
 async def knowledge(
     req: ChatRequest,
     chat_service: ChatService = Depends(get_chat),
-) -> StreamingResponse:
-    return stream_response(chat_service, req, requested_intent="knowledge")
+) -> AsyncIterator[ServerSentEvent]:
+    async for event in stream_events(chat_service, req, requested_intent="knowledge"):
+        yield event
 
 
-@router.post("/query", summary="订单查询分支（SSE）")
+@router.post("/query", summary="订单查询分支（SSE）", response_class=EventSourceResponse)
 async def query(
     req: ChatRequest,
     chat_service: ChatService = Depends(get_chat),
-) -> StreamingResponse:
-    return stream_response(chat_service, req, requested_intent="query")
+) -> AsyncIterator[ServerSentEvent]:
+    async for event in stream_events(chat_service, req, requested_intent="query"):
+        yield event
 
 
-@router.post("/service", summary="售后业务草稿分支（SSE）")
+@router.post("/service", summary="售后业务草稿分支（SSE）", response_class=EventSourceResponse)
 async def service(
     req: ChatRequest,
     chat_service: ChatService = Depends(get_chat),
-) -> StreamingResponse:
-    return stream_response(chat_service, req, requested_intent="service")
+) -> AsyncIterator[ServerSentEvent]:
+    async for event in stream_events(chat_service, req, requested_intent="service"):
+        yield event
 
 
 @router.post("/service/confirm", response_model=ServiceConfirmResponse, summary="确认并提交业务办理")
@@ -66,9 +72,10 @@ async def confirm_service(
     )
 
 
-@router.post("/fallback", summary="兜底分支（SSE）")
+@router.post("/fallback", summary="兜底分支（SSE）", response_class=EventSourceResponse)
 async def fallback(
     req: ChatRequest,
     chat_service: ChatService = Depends(get_chat),
-) -> StreamingResponse:
-    return stream_response(chat_service, req, requested_intent="fallback")
+) -> AsyncIterator[ServerSentEvent]:
+    async for event in stream_events(chat_service, req, requested_intent="fallback"):
+        yield event

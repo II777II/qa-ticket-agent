@@ -161,6 +161,11 @@ main app
 9. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
 10. `ticket` 与 `tool` 事件名仍保留在契约中，但当前对话分支不会产生。
 
+SSE 响应由 FastAPI 内置的 `EventSourceResponse + ServerSentEvent` 编码；
+路由函数以异步生成器产出 `ServerSentEvent`，并通过 `response_class=EventSourceResponse`
+交给 FastAPI 路由层编码；`ServerSentEvent.data` 直接接收 JSON 可序列化对象，不再由项目
+手写 `event:/data:` 文本。
+
 当前 `langgraph-native` 分支中，业务节点通过官方 `StreamWriter` 直接写入 custom 流：
 
 ```text
