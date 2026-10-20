@@ -27,7 +27,7 @@ export default function HomePage({ info }: { info: AgentInfo | null }) {
         <span className="home-brand">智能问答</span>
         <span className="pill">{info?.mock ? "演示模式" : info?.provider ?? "Agent"}</span>
         <span className="pill">知识库 · 已接入</span>
-        <span className="pill">工单 · 已接入</span>
+        <span className="pill">售后工单 · 已接入</span>
         <span className="spacer" />
         <VersionBadge sha={info?.git_sha} date={info?.git_date} />
       </header>
@@ -41,7 +41,7 @@ export default function HomePage({ info }: { info: AgentInfo | null }) {
           onChange={setValue}
           onSubmit={submit}
           model={info?.model || info?.provider || "Agent"}
-          placeholder="描述问题，或直接说「帮我建个工单…」"
+          placeholder="描述问题，或直接说「帮我建个售后工单…」"
         />
         <div className="prompt-row">
           {PROMPTS.map((prompt) => (
@@ -52,7 +52,7 @@ export default function HomePage({ info }: { info: AgentInfo | null }) {
         </div>
       </main>
 
-      <footer className="home-foot">回答将引用企业知识库，并自动关联相关工单</footer>
+      <footer className="home-foot">回答将引用电商帮助中心，并可创建售后工单</footer>
     </div>
   );
 }
