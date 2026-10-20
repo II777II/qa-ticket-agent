@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from langchain_core.messages import AIMessage, HumanMessage
@@ -133,6 +135,34 @@ def test_service_draft_recognizes_complete_slots(store: JsonTicketStore) -> None
     assert draft["service_type"] == "换货"
     assert draft["slots"]["service_type"] == "换货"
     assert store.count() == 0
+
+
+def test_service_node_emits_langgraph_custom_event(
+    store: JsonTicketStore,
+    retriever: InMemoryRetriever,
+) -> None:
+    graph = _build(store, retriever)
+
+    async def collect() -> list[dict]:
+        return [
+            payload
+            async for payload in graph.astream(
+                {
+                    "messages": [
+                        HumanMessage(
+                            content="订单 SO202609150020 商品损坏，申请维修，联系电话 13800138000"
+                        )
+                    ]
+                },
+                {"configurable": {"thread_id": "custom-event"}},
+                stream_mode="custom",
+            )
+        ]
+
+    payloads = asyncio.run(collect())
+    drafts = [payload for payload in payloads if payload.get("event") == "service_draft"]
+    assert len(drafts) == 1
+    assert drafts[0]["data"]["service_type"] == "维修"
 
 
 def test_fallback_branch_for_complaint(store: JsonTicketStore) -> None:

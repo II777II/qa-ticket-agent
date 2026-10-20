@@ -18,9 +18,16 @@ from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.types import StreamWriter
 
 from backend.application.agent.classifier import classify_intent
 from backend.application.agent.prompts import SYSTEM_PROMPT
+from backend.application.chat.events import (
+    EVENT_CITATION,
+    EVENT_INTENT,
+    EVENT_ORDER,
+    EVENT_SERVICE_DRAFT,
+)
 from backend.application.orders import OrderService
 from backend.application.orders.service import order_summary
 from backend.domain.intent import (
@@ -73,29 +80,46 @@ def route_by_intent(state: AgentState) -> str:
     return intent if intent in INTENTS else "fallback"
 
 
+def _emit(writer: StreamWriter, event: str, data: dict[str, Any]) -> None:
+    """按 LangGraph custom 流的约定发送一个业务事件。"""
+    writer({"event": event, "data": data})
+
+
 def _preprocess_node(state: AgentState) -> dict[str, Any]:
     text = _last_human_text(state["messages"]).strip()
     return {"question": text[:2000] or "（空消息）"}
 
 
-def _classify_node(llm: BaseChatModel) -> Callable[[AgentState], dict[str, Any]]:
-    def node(state: AgentState) -> dict[str, Any]:
+def _classify_node(llm: BaseChatModel) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
+    def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
         question = state.get("question") or _last_human_text(state["messages"])
         requested_intent = state.get("requested_intent")
         if requested_intent in INTENTS:
-            return {
+            output = {
                 "intent": requested_intent,
                 "confidence": 1.0,
                 "intent_reason": "由显式 HTTP 分支路由指定",
                 "slots": {},
             }
-        result = classify_intent(question, llm)
-        return {
-            "intent": result.intent,
-            "confidence": result.confidence,
-            "intent_reason": result.reason,
-            "slots": result.slots,
-        }
+        else:
+            result = classify_intent(question, llm)
+            output = {
+                "intent": result.intent,
+                "confidence": result.confidence,
+                "intent_reason": result.reason,
+                "slots": result.slots,
+            }
+        _emit(
+            writer,
+            EVENT_INTENT,
+            {
+                "intent": output["intent"],
+                "confidence": output["confidence"],
+                "reason": output["intent_reason"],
+                "slots": output["slots"],
+            },
+        )
+        return output
 
     return node
 
@@ -124,8 +148,8 @@ def _knowledge_node(
     llm: BaseChatModel,
     retriever: Any | None,
     system_prompt: str,
-) -> Callable[[AgentState], dict[str, Any]]:
-    def node(state: AgentState) -> dict[str, Any]:
+) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
+    def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
         history = [message for message in state["messages"] if not isinstance(message, SystemMessage)]
         question = state.get("question") or _last_human_text(history)
         prompt = system_prompt
@@ -135,14 +159,16 @@ def _knowledge_node(
             if documents:
                 citations = _to_citations(documents)
                 prompt = f"{system_prompt}\n\n{format_context(documents)}"
+        for citation in citations:
+            _emit(writer, EVENT_CITATION, citation)
         answer = llm.invoke([SystemMessage(content=prompt), *history])
         return {"messages": [answer], "retrieved": citations}
 
     return node
 
 
-def _query_node(orders: OrderService | None) -> Callable[[AgentState], dict[str, Any]]:
-    def node(state: AgentState) -> dict[str, Any]:
+def _query_node(orders: OrderService | None) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
+    def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
         question = state.get("question") or _last_human_text(state["messages"])
         order_no = ORDER_NO_RE.search(question)
         results = []
@@ -158,6 +184,7 @@ def _query_node(orders: OrderService | None) -> Callable[[AgentState], dict[str,
             return {"messages": [AIMessage(content=text)], "orders": []}
 
         summaries = [order_summary(order) for order in results]
+        _emit(writer, EVENT_ORDER, {"orders": summaries})
         lines = [f"查到 {len(summaries)} 笔订单："]
         for order in summaries:
             items = " / ".join(item["name"] for item in order["items"])
@@ -170,7 +197,7 @@ def _query_node(orders: OrderService | None) -> Callable[[AgentState], dict[str,
     return node
 
 
-def _service_node(state: AgentState) -> dict[str, Any]:
+def _service_node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
     question = state.get("question") or _last_human_text(state["messages"])
     recognized = extract_service_slots(question)
     intent_slots = state.get("slots", {})
@@ -213,6 +240,7 @@ def _service_node(state: AgentState) -> dict[str, Any]:
     draft["missing"] = missing
     draft["ready"] = not missing
     draft["status"] = "ready" if draft["ready"] else "draft"
+    _emit(writer, EVENT_SERVICE_DRAFT, draft)
 
     labels = {
         "service_type": "业务类型",

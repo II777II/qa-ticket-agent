@@ -18,12 +18,8 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
 from backend.application.chat.events import (
-    EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,
-    EVENT_INTENT,
-    EVENT_ORDER,
-    EVENT_SERVICE_DRAFT,
     EVENT_START,
     EVENT_TICKET,
     EVENT_TOKEN,
@@ -94,49 +90,6 @@ def _tool_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
                 yield EVENT_ORDER, {"orders": orders}
 
 
-def _citation_events(update: Any, announced: set[str]) -> Iterator[tuple[str, dict[str, Any]]]:
-    """把 agent 节点写回的检索结果转成 citation 事件。
-
-    一轮里 agent 可能被调用两次（先决定调工具、再总结），检索结果会重复出现，
-    所以用「来源 + 小节标题」去重，避免前端把同一段引用显示两遍。
-    """
-    if not isinstance(update, dict):
-        return
-    for node_output in update.values():
-        if not isinstance(node_output, dict):
-            continue
-        for citation in node_output.get("retrieved") or []:
-            if not isinstance(citation, dict):
-                continue
-            key = f"{citation.get('source')}::{citation.get('title')}"
-            if key in announced:
-                continue
-            announced.add(key)
-            yield EVENT_CITATION, citation
-
-
-def _state_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
-    """意图识别与订单查询结果都写在 state 里，这里转成对外事件。"""
-    if not isinstance(update, dict):
-        return
-    for node_output in update.values():
-        if not isinstance(node_output, dict):
-            continue
-        if "intent" in node_output:
-            yield EVENT_INTENT, {
-                "intent": node_output.get("intent"),
-                "confidence": node_output.get("confidence"),
-                "reason": node_output.get("intent_reason", ""),
-                "slots": node_output.get("slots", {}),
-            }
-        orders = node_output.get("orders")
-        if orders:
-            yield EVENT_ORDER, {"orders": orders}
-        draft = node_output.get("draft")
-        if isinstance(draft, dict):
-            yield EVENT_SERVICE_DRAFT, draft
-
-
 class ChatService:
     """一轮对话的用例入口。"""
 
@@ -165,7 +118,6 @@ class ChatService:
         }
 
         announced: set[str] = set()
-        citations_announced: set[str] = set()
         started = time.perf_counter()
         first_token_at: float | None = None
         answer_parts: list[str] = []
@@ -180,7 +132,7 @@ class ChatService:
                     "requested_intent": requested_intent,
                 },
                 config=config,
-                stream_mode=["messages", "updates"],
+                stream_mode=["messages", "custom", "updates"],
             ):
                 if mode == "messages":
                     chunk, meta = payload
@@ -203,12 +155,15 @@ class ChatService:
                             first_token_at = time.perf_counter()
                         answer_parts.append(text)
                         yield EVENT_TOKEN, {"text": text}
+                elif mode == "custom":
+                    if not isinstance(payload, dict):
+                        continue
+                    event = payload.get("event")
+                    data = payload.get("data")
+                    if isinstance(event, str) and isinstance(data, dict):
+                        yield event, data
                 elif mode == "updates":
                     for event, data in _tool_events(payload):
-                        yield event, data
-                    for event, data in _citation_events(payload, citations_announced):
-                        yield event, data
-                    for event, data in _state_events(payload):
                         yield event, data
                     for node_output in payload.values() if isinstance(payload, dict) else []:
                         if not isinstance(node_output, dict):

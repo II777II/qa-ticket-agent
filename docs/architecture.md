@@ -138,7 +138,7 @@ main app
 ## 一轮对话的执行路径
 
 1. 前端 `streamChat()` 发 `POST /chat`，带 `message` 与 `thread_id`；
-2. `ChatService.stream()` 以 `stream_mode=["messages", "updates"]` 订阅图；
+2. `ChatService.stream()` 以 `stream_mode=["messages", "custom", "updates"]` 订阅图；
 3. `preprocess` 清理问题，`classify` 执行 LLM 结构化意图识别，失败时退回规则；
 4. `route_by_intent` 只会进入 knowledge / query / service / fallback 之一；
 5. `/branch/{intent}` 是四个显式 HTTP 入口，会锁定对应分支并跳过再次分类；
@@ -161,6 +161,19 @@ main app
 9. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
 10. `ticket` 与 `tool` 事件名仍保留在契约中，但当前对话分支不会产生。
 
+当前 `langgraph-native` 分支中，业务节点通过官方 `StreamWriter` 直接写入 custom 流：
+
+```text
+classify      → intent
+query         → order
+knowledge     → citation
+service       → service_draft
+```
+
+ChatService 不再从 updates 中反推这些业务事件。状态仍写回 LangGraph checkpoint；
+custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“从 updates 映射事件”的实现，
+便于对比两种写法。
+
 ## 四个扩展点与生产替换
 
 | 扩展点 | POC 实现 | 抽象接口 | 生产替换 | 怎么换 |
@@ -170,7 +183,7 @@ main app
 | 检索 | 关键词 IDF 打分 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
-| 编排 | preprocess + classify + 四路分支 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
+| 编排 | preprocess + classify + 四路分支 + custom 事件 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 
 ## 几个刻意的设计取舍
 

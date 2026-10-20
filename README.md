@@ -5,6 +5,7 @@
 
 > 状态：五个阶段全部完成——后端链路、工单工具、前端对话页、RAG 引用、演示文档与联调。
 > 文档见 [docs/](docs/architecture.md)：架构与执行路径、演示脚本与话术、追问应对、运行与部署。
+> 当前分支 `langgraph-native` 使用 `StreamWriter + custom`；`sse-abstract` 保留状态投影版本。
 
 ## 技术选型
 
@@ -12,7 +13,7 @@
 | --- | --- | --- |
 | 前端 | React + TypeScript + Vite + Ant Design X | 已就绪（Bubble / Sender / ThoughtChain / Welcome） |
 | 后端 | Python 3.11 + FastAPI，SSE 流式 | 已就绪 |
-| 编排 | LangGraph StateGraph（预处理 + 意图分类 + 四路分支） | 已就绪 |
+| 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 意图分类 + 四路分支） | 已就绪 |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
 | 工具调用 | 对话暴露 `query_order`（订单查询）；工单工具保留在代码中但不再暴露 | 已就绪 |
@@ -139,7 +140,7 @@ python -m uvicorn backend.api.app:app --port 5179
 ## 测试
 
 ```powershell
-python -m pytest            # 100 个用例，约 12 秒
+python -m pytest            # 101 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 
