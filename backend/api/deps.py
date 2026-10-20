@@ -11,7 +11,7 @@ from backend.application.runtime import AgentRuntime
 def get_runtime(request: Request) -> AgentRuntime:
     return request.app.state.runtime
 
-
+#ChatService  sse=>{event,data}
 def get_chat(request: Request) -> ChatService:
     """一次请求一个用例对象：它只持有运行时引用，没有自己的状态。"""
     return ChatService(get_runtime(request))
