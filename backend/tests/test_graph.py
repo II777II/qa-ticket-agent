@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -29,6 +31,48 @@ def test_route_by_intent_maps_four_ways() -> None:
     assert route_by_intent({"messages": [], "intent": "service"}) == "service"
     assert route_by_intent({"messages": [], "intent": "fallback"}) == "fallback"
     assert route_by_intent({"messages": [], "intent": "unknown"}) == "fallback"
+
+
+@pytest.mark.parametrize("intent", ["knowledge", "query", "service", "fallback"])
+def test_requested_intent_forces_graph_branch(
+    store: JsonTicketStore,
+    retriever: InMemoryRetriever,
+    intent: str,
+) -> None:
+    graph = _build(store, retriever)
+    state = graph.invoke(
+        {
+            "messages": [HumanMessage(content="退款多久到账？")],
+            "requested_intent": intent,
+        },
+        {"configurable": {"thread_id": f"forced-{intent}"}},
+    )
+    assert state["intent"] == intent
+    assert state["intent_reason"] == "由显式 HTTP 分支路由指定"
+
+
+def test_next_turn_clears_requested_intent(
+    store: JsonTicketStore,
+    retriever: InMemoryRetriever,
+) -> None:
+    graph = _build(store, retriever)
+    config = {"configurable": {"thread_id": "forced-reset"}}
+    graph.invoke(
+        {
+            "messages": [HumanMessage(content="退款多久到账？")],
+            "requested_intent": "fallback",
+        },
+        config,
+    )
+    state = graph.invoke(
+        {
+            "messages": [HumanMessage(content="退款多久到账？")],
+            "requested_intent": None,
+        },
+        config,
+    )
+    assert state["intent"] == "knowledge"
+    assert state["intent_reason"] != "由显式 HTTP 分支路由指定"
 
 
 def test_knowledge_branch_retrieves(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:

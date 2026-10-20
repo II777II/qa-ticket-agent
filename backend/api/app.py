@@ -14,12 +14,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from backend.api.routes import agent as agent_routes
 from backend.api.routes import chat as chat_routes
 from backend.api.routes import knowledge as knowledge_routes
 from backend.api.routes import metrics as metrics_routes
 from backend.api.routes import orders as order_routes
 from backend.api.routes import system as system_routes
-from backend.api.routes import tickets as ticket_routes
 from backend.application.runtime import create_runtime
 from backend.infrastructure.config import settings
 from backend.infrastructure.logging import setup_logging
@@ -39,8 +39,8 @@ def create_app() -> FastAPI:
     setup_logging()
 
     app = FastAPI(
-        title="企业IT服务台 智能问答工单 Agent POC",
-        description="自然语言提问 -> RAG 知识库回答 -> 无法解决时自动建单。",
+        title="电商智能助手 POC",
+        description="自然语言提问 -> LLM 意图识别 -> 知识库 / 订单 / 售后草稿 / 兜底四路。",
         version="0.1.0",
         lifespan=lifespan,
     )
@@ -54,7 +54,7 @@ def create_app() -> FastAPI:
 
     app.include_router(system_routes.router)
     app.include_router(chat_routes.router)
-    app.include_router(ticket_routes.router)
+    app.include_router(agent_routes.router)
     app.include_router(order_routes.router)
     app.include_router(knowledge_routes.router)
     app.include_router(metrics_routes.router)

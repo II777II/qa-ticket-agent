@@ -64,6 +64,11 @@ async def root():
         "docs": "/docs",
         "health": "/health",
         "chat": "POST /chat",
-        "tickets": "GET /api/tickets",
+        "branches": {
+            "knowledge": "POST /branch/knowledge",
+            "query": "POST /branch/query",
+            "service": "POST /branch/service",
+            "fallback": "POST /branch/fallback",
+        },
         "frontend": "还没构建。开发用 npm run dev (5173)，演示用 npm run build 后由本服务托管",
     }

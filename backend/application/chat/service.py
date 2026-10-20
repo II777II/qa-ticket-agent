@@ -28,6 +28,7 @@ from backend.application.chat.events import (
     EVENT_TOKEN,
     EVENT_TOOL,
 )
+from backend.domain.intent import IntentName
 from backend.infrastructure.config import settings
 from backend.infrastructure.observability import estimate_tokens
 
@@ -138,11 +139,19 @@ class ChatService:
     def __init__(self, runtime: "AgentRuntime") -> None:
         self._runtime = runtime
 
-    async def stream(self, message: str, thread_id: str) -> AsyncIterator[tuple[str, dict[str, Any]]]:
+    async def stream(
+        self,
+        message: str,
+        thread_id: str,
+        *,
+        requested_intent: IntentName | None = None,
+    ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         """产出 (事件名, 载荷) 序列，供接口层编码成 SSE 或命令行直接打印。
 
         同时订阅两种流：messages 拿模型增量（吐 token、播报正在调用哪个工具），
         updates 拿节点产出（工具返回结果、建单结果、检索引用）。
+        requested_intent 只由显式分支 HTTP 路由传入；统一入口必须传 None，
+        以清除同一 thread_id 上一轮留下的强制路由状态。
         """
         config = {"configurable": {"thread_id": thread_id}}
         yield EVENT_START, {
@@ -162,7 +171,10 @@ class ChatService:
         ok = True
         try:
             async for mode, payload in self._runtime.graph.astream(
-                {"messages": [HumanMessage(content=message)]},
+                {
+                    "messages": [HumanMessage(content=message)],
+                    "requested_intent": requested_intent,
+                },
                 config=config,
                 stream_mode=["messages", "updates"],
             ):

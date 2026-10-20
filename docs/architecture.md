@@ -99,8 +99,8 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | 五层说法 | 目录 | 职责 | 换实现的代价 |
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
-| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（system / chat / tickets）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
-| 接口层（新增） | `backend/api/routes/knowledge.py`、`orders.py`、`metrics.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
+| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（system / chat / agent）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
+| 接口层（数据接口） | `backend/api/routes/knowledge.py`、`orders.py`、`metrics.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
 | 应用层 | `backend/application/` | `runtime.py` 装配；`agent/`（graph / tools / prompts）；`chat/service.py`（一轮对话）；`tickets/service.py`（售后工单）；`orders/service.py`（订单查询）；`knowledge/service.py`（知识库目录） | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 枚举与状态流转/去重规则、`errors.py` 领域异常 | 不改 |
 | 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/`、`observability/`（指标）、`version.py`（git 版本） | 只加一个分支 |
@@ -108,8 +108,8 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
 领域层不 import FastAPI / LangChain；接口层不写业务规则。
 
-前端五个页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
-`?panel=tickets`（工单查询）、`#/admin`（运营指标）。前端结构：`pages/`（页面）→
+前端页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
+`?panel=orders`（本轮订单）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→
 `components/`（可复用块）→ `hooks/`（状态）→ `api/`（网络），会话历史存 localStorage。
 
 电商业务入口另有两个独立页面：`#/orders`（订单查询，50 条演示订单）与 `#/kb`
@@ -119,10 +119,11 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 ## 一轮对话的执行路径
 
 1. 前端 `streamChat()` 发 `POST /chat`，带 `message` 与 `thread_id`；
-2. `runtime.stream()` 以 `stream_mode=["messages", "updates"]` 订阅图；
-3. `agent` 节点：用最后一条用户消息检索知识库，命中则把 `【参考资料】` 拼进系统提示，再 `llm.bind_tools(tools).invoke()`；
-4. 条件边判断：有 `tool_calls` 就走 `tools` 节点执行，回到 `agent` 重新总结；没有就 `END`；
-5. 过程中向前端推事件：
+2. `ChatService.stream()` 以 `stream_mode=["messages", "updates"]` 订阅图；
+3. `preprocess` 清理问题，`classify` 执行 LLM 结构化意图识别，失败时退回规则；
+4. `route_by_intent` 只会进入 knowledge / query / service / fallback 之一；
+5. `/branch/{intent}` 是四个显式 HTTP 入口，会锁定对应分支并跳过再次分类；
+6. 过程中向前端推事件：
 
 | 事件 | 时机 | 载荷 |
 | --- | --- | --- |
@@ -134,9 +135,9 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | `citation` | 本轮检索命中 | `index` / `source` / `title` / `snippet` / `score` |
 | `done` / `error` | 一轮结束 | —— |
 
-6. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
-7. 前端把 `tool` 事件渲染成 ThoughtChain，把 `ticket` / `citation` 渲染成气泡底部的工单标签与引用；
-8. 工单有变化时前端重新拉 `/api/tickets` 刷新右侧看板。
+7. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
+8. 前端把 `order` / `citation` 渲染成气泡底部标签，并切换右侧对应结果面板；
+9. `ticket` 与 `tool` 事件名仍保留在契约中，但当前对话分支不会产生。
 
 ## 四个扩展点与生产替换
 
@@ -147,7 +148,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | 检索 | 关键词 IDF 打分 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
-| 编排 | Agent + Tool 两节点 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
+| 编排 | preprocess + classify + 四路分支 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 
 ## 几个刻意的设计取舍
 

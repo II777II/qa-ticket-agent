@@ -24,7 +24,7 @@ from backend.application.agent.classifier import classify_intent
 from backend.application.agent.prompts import SYSTEM_PROMPT
 from backend.application.orders import OrderService
 from backend.application.orders.service import order_summary
-from backend.domain.intent import ORDER_NO_RE, extract_order_keyword, guess_category
+from backend.domain.intent import IntentName, ORDER_NO_RE, extract_order_keyword, guess_category
 from backend.infrastructure.retrieval.in_memory import format_context
 
 INTENTS = {"knowledge", "query", "service", "fallback"}
@@ -33,6 +33,7 @@ TRANSFER_HINTS = ("转人工", "人工客服", "找人工", "客服电话", "投
 
 class AgentState(MessagesState):
     question: NotRequired[str]
+    requested_intent: NotRequired[IntentName | None]
     intent: NotRequired[str]
     confidence: NotRequired[float]
     intent_reason: NotRequired[str]
@@ -75,6 +76,14 @@ def _preprocess_node(state: AgentState) -> dict[str, Any]:
 def _classify_node(llm: BaseChatModel) -> Callable[[AgentState], dict[str, Any]]:
     def node(state: AgentState) -> dict[str, Any]:
         question = state.get("question") or _last_human_text(state["messages"])
+        requested_intent = state.get("requested_intent")
+        if requested_intent in INTENTS:
+            return {
+                "intent": requested_intent,
+                "confidence": 1.0,
+                "intent_reason": "由显式 HTTP 分支路由指定",
+                "slots": {},
+            }
         result = classify_intent(question, llm)
         return {
             "intent": result.intent,

@@ -1,7 +1,7 @@
-# 电商智能助手 POC（订单查询 + 知识库问答 + 售后工单）
+# 电商智能助手 POC（订单查询 + 知识库问答）
 
 用一句话说清楚这件事：用户用日常语言描述问题 → Agent 先查电商知识库给答案并标出处 →
-订单/物流/售后问题可转到订单查询与售后工单 → 平台另提供独立的订单查询页与知识库检索页。
+订单问题转到订单查询，售后问题生成待确认草稿 → 平台另提供独立的订单查询页与知识库检索页。
 
 > 状态：五个阶段全部完成——后端链路、工单工具、前端对话页、RAG 引用、演示文档与联调。
 > 文档见 [docs/](docs/architecture.md)：架构与执行路径、演示脚本与话术、追问应对、运行与部署。
@@ -12,7 +12,7 @@
 | --- | --- | --- |
 | 前端 | React + TypeScript + Vite + Ant Design X | 已就绪（Bubble / Sender / ThoughtChain / Welcome） |
 | 后端 | Python 3.11 + FastAPI，SSE 流式 | 已就绪 |
-| 编排 | LangGraph StateGraph（只实现 Agent + Tool 两分支） | 已就绪 |
+| 编排 | LangGraph StateGraph（预处理 + 意图分类 + 四路分支） | 已就绪 |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
 | 工具调用 | 对话暴露 `query_order`（订单查询）；工单工具保留在代码中但不再暴露 | 已就绪 |
@@ -75,11 +75,13 @@ python -m uvicorn backend.api.app:app --port 5179
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| POST | `/chat` | 流式对话（SSE）。事件类型：`start` / `intent` / `token` / `order` / `citation` / `done` / `error`（`tool`/`ticket` 事件保留但当前分支不触发） |
+| POST | `/chat` | 统一流式对话入口（SSE），自动执行 LLM 意图识别并分流 |
+| POST | `/branch/knowledge` | 强制进入知识库问答分支（SSE） |
+| POST | `/branch/query` | 强制进入订单查询分支（SSE） |
+| POST | `/branch/service` | 强制进入售后业务草稿分支（SSE） |
+| POST | `/branch/fallback` | 强制进入兜底分支（SSE） |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
-| GET | `/api/tickets` | 工单列表，支持 `status` / `contact` / `limit` 过滤（阶段三看板用） |
-| GET | `/api/tickets/{id}` | 工单详情，含时间线 |
 | GET | `/api/kb/search?q=&top_k=` | 知识库检索命中（来源、小节、片段、相关度），供右侧知识面板 |
 | GET | `/api/kb/articles?q=&category=` | 知识库文章列表（目录/分类/关键字） |
 | GET | `/api/kb/categories` | 知识库分类 |
@@ -89,8 +91,8 @@ python -m uvicorn backend.api.app:app --port 5179
 | GET | `/api/orders/{order_no}` | 订单详情（明细、地址、支付、退款、状态时间线） |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
-工单落在 `backend/data/tickets.json`（可用 `DATA_DIR` 指向别处）：建单用「临时文件 + 原子替换」
-写盘，同一联系人 + 同标题 + 未关闭的重复建单会被拦下、返回已有工单。
+所有对话接口共用 `start` / `intent` / `token` / `order` / `citation` / `done` / `error`
+事件契约。售后工单的领域与应用能力仍保留，但不再挂 HTTP 路由，也不再由对话侧直接创建。
 
 ## 界面（5 个页面）
 
@@ -99,7 +101,7 @@ python -m uvicorn backend.api.app:app --port 5179
 | 地址 | 页面 | 内容 |
 | --- | --- | --- |
 | `#/` | 首页 | 只有对话框：居中输入框 + 快捷问题 + 底部版本号 |
-| `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，工具链/引用/工单标签渲染在气泡底部 |
+| `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，引用与订单标签渲染在气泡底部 |
 | `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出**这一轮**问答的 Top-K 检索命中（来源、小节、相关度、片段） |
 | `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** `query_order` 查到的订单（单号/状态/金额/商品/收货人） |
 | `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
@@ -116,20 +118,21 @@ python -m uvicorn backend.api.app:app --port 5179
 
 一轮对话在 LangGraph 里固定走：`preprocess → classify → 四路分支`。
 
-| 意图 | 判定（规则兜底） | 分支行为 | 前端事件 |
-| --- | --- | --- | --- |
-| `knowledge` 知识咨询 | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
-| `query` 订单查询 | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `OrderService`，不检索 | `order` + `token` |
-| `service` 业务办理 | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 生成**工单草稿**并追问缺失槽位，不直接建单 | `token`（草稿文本） |
-| `fallback` 兜底 | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
+| 意图 | HTTP 分支 | 判定（规则兜底） | 分支行为 | 前端事件 |
+| --- | --- | --- | --- | --- |
+| `knowledge` 知识咨询 | `POST /branch/knowledge` | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
+| `query` 订单查询 | `POST /branch/query` | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `OrderService`，不检索 | `order` + `token` |
+| `service` 业务办理 | `POST /branch/service` | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 生成**工单草稿**并追问缺失槽位，不直接建单 | `token`（草稿文本） |
+| `fallback` 兜底 | `POST /branch/fallback` | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
 
 分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
-每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。
+每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。`/chat` 负责自动分类；
+`/branch/*` 则由 HTTP 路径直接锁定意图，便于联调、测试和后续按分支独立扩展。
 
 ## 测试
 
 ```powershell
-python -m pytest            # 85 个用例，约 10 秒
+python -m pytest            # 95 个用例，约 10 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -203,7 +206,8 @@ backend/
   api/                 接口层
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
     deps.py            依赖取用点（从 app.state 取运行时与用例）
-    routes/            chat.py / tickets.py / orders.py / knowledge.py / metrics.py / system.py
+    routes/            chat.py / agent.py / orders.py / knowledge.py / metrics.py / system.py
+                       tickets.py（能力保留，当前未挂载）
     schemas.py         请求响应模型与 SSE 编码
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）

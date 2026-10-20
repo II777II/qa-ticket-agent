@@ -1,4 +1,4 @@
-"""接口用例：健康检查、能力查询、工单接口、/chat 的 SSE 事件契约。"""
+"""接口用例：健康检查、能力查询、四路分支与 SSE 事件契约。"""
 
 from __future__ import annotations
 
@@ -6,10 +6,10 @@ import asyncio
 import json
 
 import httpx
+import pytest
 
 from backend.api.app import app as api_app
 from backend.application.runtime import AgentRuntime
-from backend.domain import TicketCreate
 
 
 def _client() -> httpx.AsyncClient:
@@ -21,10 +21,15 @@ async def _get(path: str):
         return await client.get(path)
 
 
-async def _stream_chat(message: str, thread_id: str, expect_status: int = 200) -> list[tuple[str, dict]]:
+async def _stream_post(
+    path: str,
+    message: str,
+    thread_id: str,
+    expect_status: int = 200,
+) -> list[tuple[str, dict]]:
     events: list[tuple[str, dict]] = []
     async with _client() as client:
-        async with client.stream("POST", "/chat", json={"message": message, "thread_id": thread_id}) as response:
+        async with client.stream("POST", path, json={"message": message, "thread_id": thread_id}) as response:
             assert response.status_code == expect_status
             current = ""
             async for line in response.aiter_lines():
@@ -34,6 +39,10 @@ async def _stream_chat(message: str, thread_id: str, expect_status: int = 200) -
                     events.append((current, json.loads(line[6:])))
                     current = ""
     return events
+
+
+async def _stream_chat(message: str, thread_id: str, expect_status: int = 200) -> list[tuple[str, dict]]:
+    return await _stream_post("/chat", message, thread_id, expect_status)
 
 
 def _prepare(runtime: AgentRuntime) -> None:
@@ -72,33 +81,21 @@ def test_root_returns_html_or_json(isolated_runtime: AgentRuntime) -> None:
     assert response.headers["content-type"].startswith(("text/html", "application/json"))
 
 
-def test_tickets_flow(isolated_runtime: AgentRuntime) -> None:
+def test_ticket_routes_are_not_mounted(isolated_runtime: AgentRuntime) -> None:
+    """对话侧停用售后工单后，旧资源接口也不再暴露。"""
     _prepare(isolated_runtime)
-    assert asyncio.run(_get("/api/tickets")).json() == []
-
-    record, _ = isolated_runtime.tickets.create(
-        TicketCreate(
-            title="商品有质量问题",
-            description="收到的商品外壳有裂痕，需要售后处理。",
-            category="商品与质量",
-            priority="中",
-            contact="li.si@corp.com",
-        )
-    )
-    ticket_id = record.id
-
-    listing = asyncio.run(_get("/api/tickets")).json()
-    assert len(listing) == 1
-
-    detail = asyncio.run(_get(f"/api/tickets/{ticket_id}"))
-    assert detail.status_code == 200
-    assert detail.json()["title"]
-    assert len(detail.json()["events"]) >= 1
-
-
-def test_unknown_ticket_returns_404(isolated_runtime: AgentRuntime) -> None:
-    _prepare(isolated_runtime)
+    assert asyncio.run(_get("/api/tickets")).status_code == 404
     assert asyncio.run(_get("/api/tickets/TK-19700101-0001")).status_code == 404
+
+
+def test_openapi_mounts_chat_and_four_branch_routes() -> None:
+    paths = api_app.openapi()["paths"]
+    assert "/chat" in paths
+    assert paths["/branch/knowledge"]["post"]
+    assert paths["/branch/query"]["post"]
+    assert paths["/branch/service"]["post"]
+    assert paths["/branch/fallback"]["post"]
+    assert "/api/tickets" not in paths
 
 
 def test_kb_search_returns_hits(isolated_runtime: AgentRuntime) -> None:
@@ -204,3 +201,45 @@ def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
     assert intents and intents[-1]["intent"] == "query"
     text = "".join(payload["text"] for name, payload in events if name == "token")
     assert "SO" in text
+
+
+@pytest.mark.parametrize(
+    ("path", "expected_intent"),
+    [
+        ("/branch/knowledge", "knowledge"),
+        ("/branch/query", "query"),
+        ("/branch/service", "service"),
+        ("/branch/fallback", "fallback"),
+    ],
+)
+def test_explicit_branch_routes_force_intent(
+    isolated_runtime: AgentRuntime,
+    path: str,
+    expected_intent: str,
+) -> None:
+    """同一句默认会走 knowledge 的话，显式分支入口必须进入指定分支。"""
+    _prepare(isolated_runtime)
+    events = asyncio.run(
+        _stream_post(path, "退款多久到账？", f"branch-{expected_intent}")
+    )
+
+    names = [name for name, _ in events]
+    intents = [payload for name, payload in events if name == "intent"]
+    assert names[0] == "start"
+    assert names[-1] == "done"
+    assert "error" not in names
+    assert intents[-1]["intent"] == expected_intent
+    assert intents[-1]["confidence"] == 1.0
+    assert "HTTP" in intents[-1]["reason"]
+
+
+def test_explicit_branch_does_not_leak_into_next_chat_request(isolated_runtime: AgentRuntime) -> None:
+    """显式分支写下的强制意图，必须被同一 thread_id 的 /chat 自动分类清除。"""
+    _prepare(isolated_runtime)
+    thread_id = "branch-reset"
+    asyncio.run(_stream_post("/branch/fallback", "退款多久到账？", thread_id))
+    events = asyncio.run(_stream_chat("退款多久到账？", thread_id))
+
+    intent = [payload for name, payload in events if name == "intent"][-1]
+    assert intent["intent"] == "knowledge"
+    assert intent["reason"] != "由显式 HTTP 分支路由指定"
