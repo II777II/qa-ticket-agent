@@ -7,7 +7,7 @@
 这张图是**从运行时代码里导出来的**，不是画出来的示意图——它永远和 `build_graph()` 的实际结构一致：
 
 ```powershell
-python -m backend.scripts.draw_graph --png --html --both-variants
+python -m backend.scripts.draw_graph --png --html
 ```
 
 产物：
@@ -16,7 +16,6 @@ python -m backend.scripts.draw_graph --png --html --both-variants
 | --- | --- |
 | `docs/graph.png` | PNG 结构图。先试 mermaid.ink，失败则用本机 Chrome/Edge 离线渲染并裁掉空白（`--local` 可强制离线） |
 | `docs/graph.mmd` | Mermaid 源文本，粘到支持 Mermaid 的编辑器即可看 |
-| `docs/graph-minimal.mmd` | 对照用的最小图（无工具、无检索，退化成 Agent → END） |
 | `docs/graph.html` | 单页预览（浏览器打开，按需从 CDN 加载 mermaid） |
 | 终端 | ASCII 图（需要 `pip install grandalf`），内网无图形环境时最省事 |
 
@@ -42,27 +41,30 @@ print(graph.get_graph().draw_ascii())                  # 离线看结构
 
 ```mermaid
 flowchart TD
-    S([__start__]) --> A
-    A["agent<br/>检索知识库 (RAG)<br/>命中片段拼进系统提示<br/>llm.bind_tools().invoke()"]
-    A -- 有 tool_calls --> T[tools]
-    T["tools<br/>query_order"]
-    A -- 无 tool_calls --> E([__end__])
-    T --> A
+    S([__start__]) --> P["preprocess<br/>trim / 截断"]
+    P --> C["classify<br/>LLM 结构化输出 + 规则兜底"]
+    C -- knowledge --> K["knowledge<br/>RAG 检索 + 生成回答"]
+    C -- query --> Q["query<br/>OrderService 查询"]
+    C -- service --> V["service<br/>槽位抽取 + 工单草稿"]
+    C -- fallback --> F["fallback<br/>投诉/转人工/闲聊"]
+    K --> E([__end__])
+    Q --> E
+    V --> E
+    F --> E
 ```
 
-| 元素 | 谁定义的 | 说明 |
-| --- | --- | --- |
-| `__start__` / `__end__` | LangGraph 内置 | 入口与出口，编译时自动注入 |
-| `agent` | 本项目（`graph.py`） | 四步：取用户消息 → **检索知识库（RAG）** → 命中片段拼进系统提示 → `llm.bind_tools().invoke()`；产出 `tool_calls` 或最终回答 |
-| `tools` | `langgraph.prebuilt.ToolNode` | 执行工具并把结果作为 `ToolMessage` 写回状态。里面装的正是下面三个工具 |
-| `agent → tools` / `agent → __end__` | 本项目（`route_after_agent`） | 同一条条件边：有 `tool_calls` 走工具，否则结束 |
-| `tools → agent` | 本项目 | 固定回边，工具执行完回到模型重新总结 |
+| 元素 | 说明 |
+| --- | --- |
+| `preprocess` | 取最后一条用户消息，去空白并截断到 2000 字 |
+| `classify` | `classify_intent()`：优先 LLM `with_structured_output`，演示模式/失败时用 `rule_classify()`；产出 intent/confidence/reason/slots |
+| `route_by_intent` | 条件边：只允许 knowledge / query / service / fallback，未知意图走 fallback |
+| `knowledge` | 调用检索器并拼【参考资料】，再 `llm.invoke()` 生成带引用回答 |
+| `query` | 解析订单号/关键词，调用 `OrderService.get/search`，返回订单列表（不检索） |
+| `service` | 生成售后工单草稿、做槽位缺口检查；POC 不直接建单 |
+| `fallback` | 投诉/转人工/闲聊兜底话术；演示版无人工坐席 |
 
-没有工具可用时（阶段一的空工具表），`tools` 节点与条件边都不注册，图退化成 `__start__ → agent → __end__`，
-对照见 `docs/graph-minimal.mmd`。
-
-上面的节点标注不是手写的：`draw_graph.py` 会从运行时读出「agent 是否接入检索」「tools 里注册了哪些工具」，
-再写进图里，所以图和代码不会各说各话。
+当前 LangGraph 里**不再有 `agent` / `tools` 节点**：订单分支直接调用用例，工单工具仍保留在
+`application/agent/tools.py` 与单测中，但运行时不暴露。
 
 ## 工具是什么
 
@@ -125,6 +127,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | 事件 | 时机 | 载荷 |
 | --- | --- | --- |
 | `start` | 收到请求 | `thread_id` / `provider` / `mock` |
+| `intent` | 意图识别完成 | `intent` / `confidence` / `reason` / `slots` |
 | `token` | 模型流式增量 | `text` |
 | `tool` | 工具被调用 / 返回 | `phase=call\|result`、`name`、`ok`、`message` |
 | `ticket` | 工具产出工单 | `tickets[]`（完整工单） |

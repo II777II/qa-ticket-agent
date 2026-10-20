@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（86 个，`backend/tests/`）——后端链路、订单/知识库数据、检索、存储、工具、编排、接口与整链；
+- **自动化用例**（85 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 86 passed in ~11s
+python -m pytest              # 85 passed in ~10s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -117,6 +117,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | M-16 | 订单查询页 | 打开 `#/orders`，按订单号/状态过滤并点开一条订单 | 列表即时过滤；右侧显示地址、商品明细、金额、支付/退款与状态时间线 |
 | M-17 | 知识库检索页 | 打开 `#/kb`，输入「退款到账」并切换分类 | 文章列表与 RAG 命中同时更新；点击文章在新标签打开对应 HTML 页面 |
 | M-18 | 对话查订单 | 在对话里输入「帮我查询张三的订单」 | 出现 query_order 工具链并列出订单；**没有引用、没有新建工单** |
+| M-19 | 意图路由徽标 | 依次输入退款问答、张三订单、商品损坏、我要投诉 | 顶栏路由依次显示：知识咨询 / 订单查询 / 业务办理 / 兜底·转人工 |
 
 ## 八、需求 → 用例覆盖
 

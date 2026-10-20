@@ -18,13 +18,23 @@ config:
 ---
 graph TD;
 	__start__([<p>__start__</p>]):::first
-	agent["agent<br/>检索知识库 (RAG)<br/>命中片段拼进系统提示<br/>llm.bind_tools().invoke()"]
-	tools["tools<br/>create_ticket / query_ticket / escalate_to_human"]
+	preprocess["preprocess<br/>清洗 / 截断"]
+	classify["classify<br/>LLM 意图识别 + 规则兜底"]
+	knowledge["knowledge<br/>RAG 问答"]
+	query["query<br/>订单查询"]
+	service["service<br/>工单草稿"]
+	fallback["fallback<br/>投诉 / 闲聊 / 转人工"]
 	__end__([<p>__end__</p>]):::last
-	__start__ --> agent;
-	agent -.->|无 tool_calls| __end__;
-	agent -.->|有 tool_calls| tools;
-	tools --> agent;
+	__start__ --> preprocess;
+	classify -.->|fallback| fallback;
+	classify -.->|knowledge| knowledge;
+	classify -.->|query| query;
+	classify -.->|service| service;
+	preprocess --> classify;
+	fallback --> __end__;
+	knowledge --> __end__;
+	query --> __end__;
+	service --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc
@@ -37,13 +47,23 @@ config:
 ---
 graph TD;
 	__start__([&lt;p>__start__&lt;/p>]):::first
-	agent["agent&lt;br/>检索知识库 (RAG)&lt;br/>命中片段拼进系统提示&lt;br/>llm.bind_tools().invoke()"]
-	tools["tools&lt;br/>create_ticket / query_ticket / escalate_to_human"]
+	preprocess["preprocess&lt;br/>清洗 / 截断"]
+	classify["classify&lt;br/>LLM 意图识别 + 规则兜底"]
+	knowledge["knowledge&lt;br/>RAG 问答"]
+	query["query&lt;br/>订单查询"]
+	service["service&lt;br/>工单草稿"]
+	fallback["fallback&lt;br/>投诉 / 闲聊 / 转人工"]
 	__end__([&lt;p>__end__&lt;/p>]):::last
-	__start__ --> agent;
-	agent -.->|无 tool_calls| __end__;
-	agent -.->|有 tool_calls| tools;
-	tools --> agent;
+	__start__ --> preprocess;
+	classify -.->|fallback| fallback;
+	classify -.->|knowledge| knowledge;
+	classify -.->|query| query;
+	classify -.->|service| service;
+	preprocess --> classify;
+	fallback --> __end__;
+	knowledge --> __end__;
+	query --> __end__;
+	service --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
 	classDef first fill-opacity:0
 	classDef last fill:#bfb6fc

@@ -197,10 +197,10 @@ def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
     events = asyncio.run(_stream_chat("帮我查询张三的订单", "api-order"))
     names = [name for name, _ in events]
-    tools = [(payload["phase"], payload["name"]) for name, payload in events if name == "tool"]
-    assert ("call", "query_order") in tools
     assert "citation" not in names
     assert "ticket" not in names
     assert "order" in names
+    intents = [payload for name, payload in events if name == "intent"]
+    assert intents and intents[-1]["intent"] == "query"
     text = "".join(payload["text"] for name, payload in events if name == "token")
     assert "SO" in text

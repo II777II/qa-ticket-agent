@@ -15,12 +15,13 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
-from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
 from backend.application.chat.events import (
     EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,
+    EVENT_INTENT,
     EVENT_ORDER,
     EVENT_START,
     EVENT_TICKET,
@@ -112,6 +113,25 @@ def _citation_events(update: Any, announced: set[str]) -> Iterator[tuple[str, di
             yield EVENT_CITATION, citation
 
 
+def _state_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
+    """意图识别与订单查询结果都写在 state 里，这里转成对外事件。"""
+    if not isinstance(update, dict):
+        return
+    for node_output in update.values():
+        if not isinstance(node_output, dict):
+            continue
+        if "intent" in node_output:
+            yield EVENT_INTENT, {
+                "intent": node_output.get("intent"),
+                "confidence": node_output.get("confidence"),
+                "reason": node_output.get("intent_reason", ""),
+                "slots": node_output.get("slots", {}),
+            }
+        orders = node_output.get("orders")
+        if orders:
+            yield EVENT_ORDER, {"orders": orders}
+
+
 class ChatService:
     """一轮对话的用例入口。"""
 
@@ -136,6 +156,8 @@ class ChatService:
         started = time.perf_counter()
         first_token_at: float | None = None
         answer_parts: list[str] = []
+        emitted_text = False
+        final_text = ""
         usage_tokens = 0
         ok = True
         try:
@@ -146,7 +168,7 @@ class ChatService:
             ):
                 if mode == "messages":
                     chunk, meta = payload
-                    if not isinstance(chunk, AIMessageChunk) or meta.get("langgraph_node") != "agent":
+                    if not isinstance(chunk, AIMessageChunk):
                         continue
                     for call in chunk.tool_calls or []:
                         # 流式下参数是分片到达的，这里只播报「要调用谁」，参数以工具返回为准
@@ -160,6 +182,7 @@ class ChatService:
                         usage_tokens = max(usage_tokens, int(usage.get("total_tokens") or 0))
                     text = _text_of(chunk)
                     if text:
+                        emitted_text = True
                         if first_token_at is None:
                             first_token_at = time.perf_counter()
                         answer_parts.append(text)
@@ -169,7 +192,20 @@ class ChatService:
                         yield event, data
                     for event, data in _citation_events(payload, citations_announced):
                         yield event, data
+                    for event, data in _state_events(payload):
+                        yield event, data
+                    for node_output in payload.values() if isinstance(payload, dict) else []:
+                        if not isinstance(node_output, dict):
+                            continue
+                        for item in node_output.get("messages") or []:
+                            if isinstance(item, AIMessage) and not isinstance(item, AIMessageChunk):
+                                final_text = _text_of(item) or final_text
 
+            # 非流式分支（订单查询/业务草稿/兜底）直接返回 AIMessage，这里补发一次文本
+            if not emitted_text and final_text:
+                first_token_at = time.perf_counter()
+                answer_parts.append(final_text)
+                yield EVENT_TOKEN, {"text": final_text}
             yield EVENT_DONE, {"thread_id": thread_id}
         except Exception as exc:  # 单轮失败不该拖垮服务，转成 error 事件交给前端
             ok = False

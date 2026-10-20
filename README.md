@@ -75,7 +75,7 @@ python -m uvicorn backend.api.app:app --port 5179
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| POST | `/chat` | 流式对话（SSE）。事件类型：`start` / `token` / `tool` / `order` / `citation` / `done` / `error`（`ticket` 事件保留但对话不再触发） |
+| POST | `/chat` | 流式对话（SSE）。事件类型：`start` / `intent` / `token` / `order` / `citation` / `done` / `error`（`tool`/`ticket` 事件保留但当前分支不触发） |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
 | GET | `/api/tickets` | 工单列表，支持 `status` / `contact` / `limit` 过滤（阶段三看板用） |
@@ -112,10 +112,24 @@ python -m uvicorn backend.api.app:app --port 5179
 右侧面板按「轮次」绑定：新提问后面板自动切到新一轮（结果为空时不会残留上一轮的内容）；
 点历史消息里的引用/订单标签，面板会切回那一轮的数据。对话侧不再提供售后工单，只做知识库问答与订单查询。
 
+## 对话路由（四路）
+
+一轮对话在 LangGraph 里固定走：`preprocess → classify → 四路分支`。
+
+| 意图 | 判定（规则兜底） | 分支行为 | 前端事件 |
+| --- | --- | --- | --- |
+| `knowledge` 知识咨询 | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
+| `query` 订单查询 | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `OrderService`，不检索 | `order` + `token` |
+| `service` 业务办理 | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 生成**工单草稿**并追问缺失槽位，不直接建单 | `token`（草稿文本） |
+| `fallback` 兜底 | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
+
+分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
+每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。
+
 ## 测试
 
 ```powershell
-python -m pytest            # 86 个用例，约 11 秒
+python -m pytest            # 85 个用例，约 10 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -126,11 +140,11 @@ python -m pytest -v         # 看每个用例名
 ## 结构图
 
 ```powershell
-python -m backend.scripts.draw_graph --png --html --both-variants
+python -m backend.scripts.draw_graph --png --html
 ```
 
 从运行时图导出（所以永远和 `build_graph()` 的实际结构一致）：终端 ASCII 图、`docs/graph.png`、
-`docs/graph.mmd`（Mermaid 源）、`docs/graph-minimal.mmd`（无工具的最小图对照）、`docs/graph.html`。
+`docs/graph.mmd`（Mermaid 源）、`docs/graph.html`。
 图上的标注也是从运行时读出来的——`agent` 节点会写明「检索知识库 (RAG) → 拼进系统提示 → 调模型」，
 `tools` 节点会列出实际注册的工具名，条件边会标出 `有/无 tool_calls`。
 PNG 先试 mermaid.ink，失败就用本机 Chrome/Edge 离线渲染并裁掉空白（`--local` 可强制离线）。

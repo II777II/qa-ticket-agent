@@ -29,6 +29,13 @@ export interface ErrorEvent {
   message: string;
 }
 
+export interface IntentEvent {
+  intent: "knowledge" | "query" | "service" | "fallback";
+  confidence: number;
+  reason: string;
+  slots: Record<string, string>;
+}
+
 export interface TicketEvent {
   at: string;
   action: string;
@@ -84,6 +91,7 @@ export interface ChatMessage {
   tickets: Ticket[];
   orders: OrderSummary[];
   citations: CitationEvent[];
+  intent?: IntentEvent;
 }
 
 export interface StreamHandlers {
@@ -92,6 +100,7 @@ export interface StreamHandlers {
   onTool?: (event: ToolEvent) => void;
   onTicket?: (tickets: Ticket[]) => void;
   onOrder?: (orders: OrderSummary[]) => void;
+  onIntent?: (event: IntentEvent) => void;
   onCitation?: (event: CitationEvent) => void;
   onDone?: () => void;
   onError?: (event: ErrorEvent) => void;

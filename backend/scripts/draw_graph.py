@@ -170,6 +170,24 @@ def _annotate(mermaid: str, *, tool_names: list[str], has_retriever: bool) -> st
     # 条件边：LangGraph 不标判断条件，这里补上
     mermaid = re.sub(r"(?m)^(\s*)agent\s*-\.->\s*__end__;", r"\1agent -.->|无 tool_calls| __end__;", mermaid)
     mermaid = re.sub(r"(?m)^(\s*)agent\s*-\.->\s*tools;", r"\1agent -.->|有 tool_calls| tools;", mermaid)
+
+    # 四路路由主干：给节点与条件边补上中文说明
+    labels = {
+        "preprocess": "preprocess<br/>清洗 / 截断",
+        "classify": "classify<br/>LLM 意图识别 + 规则兜底",
+        "knowledge": "knowledge<br/>RAG 问答",
+        "query": "query<br/>订单查询",
+        "service": "service<br/>工单草稿",
+        "fallback": "fallback<br/>投诉 / 闲聊 / 转人工",
+    }
+    for node, label in labels.items():
+        mermaid = re.sub(rf"(?m)^(\s*){node}\({node}\)\s*$", rf'\1{node}["{label}"]', mermaid)
+    for branch in ("knowledge", "query", "service", "fallback"):
+        mermaid = re.sub(
+            rf"(?m)^(\s*)classify\s*-\.->\s*{branch};",
+            rf"\1classify -.->|{branch}| {branch};",
+            mermaid,
+        )
     return mermaid
 
 
@@ -180,7 +198,6 @@ def main() -> int:
     parser.add_argument("--png", action="store_true", help="额外渲染 PNG（默认走 mermaid.ink，需要联网）")
     parser.add_argument("--html", action="store_true", help="额外导出可离线打开的 HTML（用仓库里自带的 mermaid）")
     parser.add_argument("--local", action="store_true", help="PNG 跳过 mermaid.ink，直接用本机浏览器离线渲染")
-    parser.add_argument("--both-variants", action="store_true", help="同时画「最小图（无工具/无检索）」作对照")
     args = parser.parse_args()
 
     runtime = create_runtime()
@@ -194,8 +211,8 @@ def main() -> int:
         print(drawable.draw_ascii())
     except ImportError:
         print("（缺少 grandalf，跳过 ASCII：pip install grandalf）")
-    print(f"tools 节点内注册的工具：{'、'.join(tool_names) if tool_names else '（无，图里不会出现 tools 节点）'}")
-    print(f"agent 节点是否接入检索：{'是（RAG）' if has_retriever else '否'}")
+    print(f"图内节点：{' / '.join(sorted(drawable.nodes))}")
+    print(f"运行时暴露的工具：{'、'.join(tool_names) if tool_names else '无'}")
 
     if args.ascii:
         return 0
@@ -207,20 +224,6 @@ def main() -> int:
     mmd_path.write_text(mermaid, encoding="utf-8")
     print(f"=== Mermaid 源已写出：{mmd_path} ===")
     print(mermaid)
-
-    if args.both_variants:
-        from backend.application.agent.graph import build_graph
-
-        minimal = build_graph(llm=runtime.llm).get_graph()  # 不带工具与检索的最小图
-        minimal_path = out_dir / "graph-minimal.mmd"
-        minimal_path.write_text(
-            _annotate(minimal.draw_mermaid(), tool_names=[], has_retriever=False), encoding="utf-8"
-        )
-        print(f"=== 最小图（无工具/无检索）已写出：{minimal_path} ===")
-        try:
-            print(minimal.draw_ascii())
-        except ImportError:
-            pass
 
     html_path: Path | None = None
     if args.html or args.png:

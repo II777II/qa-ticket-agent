@@ -34,3 +34,21 @@ class OrderService:
 
     def count(self) -> int:
         return self._store.count()
+
+
+def order_summary(order: OrderRecord) -> dict:
+    """工具与路由节点共用的订单摘要（SSE order 事件的载荷）。"""
+    return {
+        "order_no": order.order_no,
+        "status": order.status_label,
+        "pay_status": order.pay_status_label,
+        "customer": (order.user or {}).get("name") or order.user_id,
+        "payable_amount": order.payable_amount,
+        "paid_amount": order.paid_amount,
+        "refund_amount": order.refund_amount,
+        "created_at": order.created_at,
+        "items": [
+            {"name": item.product_name, "spec": item.sku_spec, "quantity": item.quantity, "price": item.price}
+            for item in order.items
+        ],
+    }

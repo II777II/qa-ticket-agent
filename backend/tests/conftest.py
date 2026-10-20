@@ -70,7 +70,13 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     tools = create_tools(tickets, orders_service, include_tickets=False)
     retriever = InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
     checkpointer = InMemorySaver()
-    graph = build_graph(llm=llm, tools=tools, retriever=retriever, checkpointer=checkpointer)
+    graph = build_graph(
+        llm=llm,
+        tools=tools,
+        retriever=retriever,
+        checkpointer=checkpointer,
+        order_service=orders_service,
+    )
     return AgentRuntime(
         graph=graph,
         llm=llm,

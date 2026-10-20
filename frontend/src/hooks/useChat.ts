@@ -7,7 +7,7 @@
 import { useCallback, useRef, useState } from "react";
 
 import { streamChat } from "../api/agent";
-import type { ChatMessage, OrderSummary, Ticket, ToolCallView, ToolEvent } from "../types";
+import type { ChatMessage, IntentEvent, OrderSummary, Ticket, ToolCallView, ToolEvent } from "../types";
 
 function newKey(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -98,6 +98,7 @@ export function useChat(): UseChatResult {
             },
             onOrder: (orders) =>
               patch((message) => ({ ...message, loading: false, orders: mergeOrders(message.orders, orders) })),
+            onIntent: (intent: IntentEvent) => patch((message) => ({ ...message, intent })),
             onCitation: (citation) =>
               patch((message) => ({ ...message, citations: [...message.citations, citation] })),
             onError: (error) =>

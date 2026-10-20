@@ -82,6 +82,7 @@ def create_runtime() -> AgentRuntime:
         tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,
+        order_service=orders,
     )
     logger.info(
         "Agent 运行时装配完成: %s",

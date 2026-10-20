@@ -13,6 +13,13 @@ import { PENDING_QUESTION_KEY, PROMPTS } from "../prompts";
 import { navigate } from "../router";
 import type { AgentInfo, ChatPanel, Conversation, KnowledgeHit } from "../types";
 
+const INTENT_LABELS: Record<string, string> = {
+  knowledge: "知识咨询",
+  query: "订单查询",
+  service: "业务办理",
+  fallback: "兜底/转人工",
+};
+
 export interface ChatPageProps {
   info: AgentInfo | null;
   initialPanel: ChatPanel;
@@ -154,6 +161,10 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
   };
 
   const title = items.find((item) => item.id === activeId)?.title ?? (messages.length ? "会话进行中" : "新对话");
+  const latestIntent = useMemo(
+    () => [...messages].reverse().find((message) => message.intent)?.intent,
+    [messages],
+  );
 
   return (
     <div className="shell">
@@ -177,6 +188,9 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
           <span className="topbar-title">{title}</span>
           <span className="pill">{info?.mock ? "演示模式" : info?.provider ?? "Agent"}</span>
           <span className="pill">记忆 · {info?.checkpointer ?? "未接入"}</span>
+          <span className="pill">
+            路由 · {latestIntent ? INTENT_LABELS[latestIntent.intent] ?? latestIntent.intent : "—"}
+          </span>
           <span className="spacer" />
           <button type="button" className={panel === "knowledge" ? "toggle active" : "toggle"} onClick={() => openPanel("knowledge")}>
             知识库

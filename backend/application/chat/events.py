@@ -1,6 +1,7 @@
 """对话事件词表——应用层与接口层之间的契约。
 
     start     一轮开始（带模型名与是否演示模式）
+    intent    意图识别结果（意图/置信度/原因/槽位）
     token     模型输出增量
     tool      工具调用与返回
     ticket    产生或查到的工单
@@ -16,6 +17,7 @@ CLI 与前端按事件名分发。加能力 = 加事件名，不动接口形状�
 from __future__ import annotations
 
 EVENT_START = "start"
+EVENT_INTENT = "intent"
 EVENT_TOKEN = "token"
 EVENT_TOOL = "tool"
 EVENT_CITATION = "citation"

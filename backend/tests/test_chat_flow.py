@@ -43,13 +43,12 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
 
     # 2. 订单查询：走 query_order，不出引用、不建单
     ordered = _turn(runtime, "帮我查询张三的订单", thread)
-    assert any(tool["name"] == "query_order" for tool in ordered["tools"])
     assert ordered["orders"], "应返回张三的订单"
     assert not ordered["citations"]
     assert not ordered["tickets"]
 
     # 5. 多轮追问：上下文累积且仍能检索
-    followup = _turn(runtime, "那退款失败会怎么处理？", thread)
+    followup = _turn(runtime, "那发票怎么开？", thread)
     assert followup["citations"], "追问同样应命中知识库"
     state = asyncio.run(runtime.graph.aget_state({"configurable": {"thread_id": thread}})).values
     assert len(state["messages"]) >= 6
@@ -60,6 +59,7 @@ def test_ticket_request_does_not_create_ticket(isolated_runtime: AgentRuntime) -
     result = _turn(isolated_runtime, "帮我建个工单，商品有质量问题", "flow-2")
     assert not any(tool["name"] == "create_ticket" for tool in result["tools"])
     assert result["tickets"] == []
+    assert "草稿" in result["text"]
 
 
 def test_threads_do_not_share_memory(isolated_runtime: AgentRuntime) -> None:
@@ -85,9 +85,9 @@ def test_unknown_question_falls_back_without_citation(isolated_runtime: AgentRun
 
 
 def test_order_query_uses_tool_without_rag(isolated_runtime: AgentRuntime) -> None:
-    """「查张三的订单」应调 query_order，不引用知识库、也不建售后工单。"""
+    """「查张三的订单」应走 query 分支，不引用知识库、也不建售后工单。"""
     result = _turn(isolated_runtime, "帮我查询张三的订单", "flow-order")
-    assert any(tool["name"] == "query_order" for tool in result["tools"])
+    assert result["orders"]
     assert result["citations"] == []
     assert result["tickets"] == []
     assert "SO" in result["text"]

@@ -11,6 +11,7 @@ import type {
   KnowledgeCategory,
   KnowledgeHit,
   MetricsSummary,
+  IntentEvent,
   OrderRecord,
   OrderSummary,
   StreamHandlers,
@@ -183,6 +184,9 @@ function dispatch(
       break;
     case "order":
       handlers.onOrder?.((payload.orders ?? []) as unknown as OrderSummary[]);
+      break;
+    case "intent":
+      handlers.onIntent?.(payload as unknown as IntentEvent);
       break;
     case "citation":
       handlers.onCitation?.({

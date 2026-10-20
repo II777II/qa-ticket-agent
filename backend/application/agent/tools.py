@@ -20,9 +20,10 @@ from typing import Any
 from langchain_core.tools import BaseTool, tool
 
 from backend.application.orders import OrderService
+from backend.application.orders.service import order_summary
 from backend.application.tickets import TicketService
 from backend.domain import TicketCreate
-from backend.domain.orders import ORDER_STATUS_LABELS, OrderRecord
+from backend.domain.orders import ORDER_STATUS_LABELS
 
 
 def _dump(payload: dict[str, Any]) -> str:
@@ -30,23 +31,6 @@ def _dump(payload: dict[str, Any]) -> str:
 
 
 STATUS_BY_LABEL = {label: code for code, label in ORDER_STATUS_LABELS.items()}
-
-
-def _order_summary(order: OrderRecord) -> dict[str, Any]:
-    return {
-        "order_no": order.order_no,
-        "status": order.status_label,
-        "pay_status": order.pay_status_label,
-        "customer": (order.user or {}).get("name") or order.user_id,
-        "payable_amount": order.payable_amount,
-        "paid_amount": order.paid_amount,
-        "refund_amount": order.refund_amount,
-        "created_at": order.created_at,
-        "items": [
-            {"name": item.product_name, "spec": item.sku_spec, "quantity": item.quantity, "price": item.price}
-            for item in order.items
-        ],
-    }
 
 
 def create_tools(tickets: TicketService, orders: OrderService, *, include_tickets: bool = True) -> list[BaseTool]:
@@ -175,7 +159,7 @@ def create_tools(tickets: TicketService, orders: OrderService, *, include_ticket
             {
                 "ok": True,
                 "action": "query_order",
-                "orders": [_order_summary(order) for order in results],
+                "orders": [order_summary(order) for order in results],
                 "message": f"查到 {len(results)} 笔订单",
             }
         )
