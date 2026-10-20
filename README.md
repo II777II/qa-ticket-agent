@@ -15,7 +15,7 @@
 | 编排 | LangGraph StateGraph（只实现 Agent + Tool 两分支） | 已就绪 |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
-| 工具调用 | `create_ticket` / `query_ticket` / `escalate_to_human` / `query_order` | 已就绪 |
+| 工具调用 | 对话暴露 `query_order`（订单查询）；工单工具保留在代码中但不再暴露 | 已就绪 |
 | 简易 RAG | 进程内检索 + 50 篇电商 HTML + 引用 | 已就绪（HTML 按 h2 切块） |
 | 订单查询 | JSON 演示数据（50 单，按 Postgres 表形状） | 已就绪（`#/orders`） |
 | 知识库 | 50 篇 HTML 文章 + 分类/标签目录 | 已就绪（`#/kb`） |
@@ -40,13 +40,11 @@ python -m backend.scripts.cli_chat --once "退款多久到账？"
 # 订单查询：按收货人姓名/订单号直接查，不建工单
 python -m backend.scripts.cli_chat --once "帮我查询张三的订单"
 
-# 走一遍「问答 → 建单 → 查进度 → 转人工」（演示模式下也能跑）
+# 走一遍「知识库问答 → 订单查询 → 多轮追问」（演示模式下也能跑）
 python -m backend.scripts.cli_chat
-#   你 > 退款多久到账                          <- 只咨询，不该建单
-#   你 > 帮我建个工单，商品有质量问题，联系我 zhang.san@corp.com
-#   你 > TK-20261016-0001 处理到哪了
-#   你 > TK-20261016-0001 帮我转人工
-python -m backend.scripts.cli_chat --tickets     # 看当前工单列表
+#   你 > 退款多久到账                          <- 知识库问答，带引用
+#   你 > 帮我查询张三的订单                    <- 调 query_order，不建单
+#   你 > 那退款失败会怎么处理                  <- 多轮追问
 
 # 后端：起 HTTP 服务（/docs 里有交互式接口文档）
 uvicorn backend.api.app:app --reload --port 5179
@@ -77,7 +75,7 @@ python -m uvicorn backend.api.app:app --port 5179
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| POST | `/chat` | 流式对话（SSE）。事件类型：`start` / `token` / `tool` / `ticket` / `citation`(阶段四) / `done` / `error` |
+| POST | `/chat` | 流式对话（SSE）。事件类型：`start` / `token` / `tool` / `order` / `citation` / `done` / `error`（`ticket` 事件保留但对话不再触发） |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
 | GET | `/api/tickets` | 工单列表，支持 `status` / `contact` / `limit` 过滤（阶段三看板用） |
@@ -103,7 +101,7 @@ python -m uvicorn backend.api.app:app --port 5179
 | `#/` | 首页 | 只有对话框：居中输入框 + 快捷问题 + 底部版本号 |
 | `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，工具链/引用/工单标签渲染在气泡底部 |
 | `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出**这一轮**问答的 Top-K 检索命中（来源、小节、相关度、片段） |
-| `#/chat?panel=tickets` | 对话 + 工单 | 右侧显示**这一轮**产生/查询到的工单；可显式切换「查询全部」+ 详情抽屉（时间线） |
+| `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** `query_order` 查到的订单（单号/状态/金额/商品/收货人） |
 | `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
 | `#/kb` | 知识库检索 | 8 个分类浏览 50 篇 HTML；关键词检索 + RAG 命中片段，点击打开 HTML 原文 |
 | `#/admin` | 后台管理 | Token 消耗、平均首字延迟、请求总量、错误率、7 天趋势、模型调用明细 |
@@ -112,8 +110,7 @@ python -m uvicorn backend.api.app:app --port 5179
 页脚/侧栏显示当前 git 短 hash，方便对照改前/改后版本。
 
 右侧面板按「轮次」绑定：新提问后面板自动切到新一轮（结果为空时不会残留上一轮的内容）；
-点历史消息里的引用/工单标签，面板会切回那一轮的数据。工单列表只在显式点「查询全部」时才请求全量接口，
-不存在「进页面就把所有工单缓存在右边」的行为。
+点历史消息里的引用/订单标签，面板会切回那一轮的数据。对话侧不再提供售后工单，只做知识库问答与订单查询。
 
 ## 测试
 
@@ -204,7 +201,7 @@ frontend/
   src/router.ts        hash 路由（#/、#/chat、#/orders、#/kb、#/admin）
   src/App.tsx          路由分发 + 后端信息 + 离线提示
   src/pages/           HomePage / ChatPage / OrdersPage / KnowledgePage / AdminPage
-  src/components/      Sidebar / Composer / MessageList / KnowledgePanel / TicketPanel
+  src/components/      Sidebar / Composer / MessageList / KnowledgePanel / OrderPanel
                        / KpiCard / TrendChart / VersionBadge / SiteSidebar
   src/hooks/           useChat（流式与会话恢复）、useConversations（localStorage 历史）
   src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单/知识库/指标查询

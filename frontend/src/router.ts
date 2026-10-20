@@ -30,7 +30,7 @@ export function parseRoute(hash: string): AppRoute {
           : "home";
   return {
     page,
-    panel: panel === "knowledge" || panel === "tickets" ? panel : "none",
+    panel: panel === "knowledge" || panel === "orders" ? panel : "none",
   };
 }
 

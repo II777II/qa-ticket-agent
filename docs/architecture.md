@@ -45,7 +45,7 @@ flowchart TD
     S([__start__]) --> A
     A["agent<br/>检索知识库 (RAG)<br/>命中片段拼进系统提示<br/>llm.bind_tools().invoke()"]
     A -- 有 tool_calls --> T[tools]
-    T["tools<br/>create_ticket / query_ticket / escalate_to_human"]
+    T["tools<br/>query_order"]
     A -- 无 tool_calls --> E([__end__])
     T --> A
 ```
@@ -76,6 +76,9 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | `query_ticket` | 查进度、催单 | `ticket_id` / `contact` / `urge` | 用户问「处理到哪了」「催一下」「我的工单」 | `{ok, tickets[], message}` |
 | `escalate_to_human` | 转人工 | `ticket_id` / `reason` | 用户要求转人工、或超出能力范围 | `{ok, ticket}` |
 | `query_order` | 查订单 | `order_no` / `keyword`（姓名/手机号/商品）/ `status` | 用户问「我的订单/订单进度/订单号」，命中 `order_lookup` 意图 | `{ok, orders[], message}` |
+
+> 当前运行时只向 Agent 暴露 `query_order`（`create_tools(..., include_tickets=False)`）；
+> 三个工单工具保留在代码与单测里，供后续产品需要时恢复。
 
 三个工具共同的设计：
 

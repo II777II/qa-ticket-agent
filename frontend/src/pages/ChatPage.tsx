@@ -1,17 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RobotOutlined } from "@ant-design/icons";
 
-import { listTickets, searchKnowledge } from "../api/agent";
+import { searchKnowledge } from "../api/agent";
 import Composer from "../components/Composer";
 import KnowledgePanel from "../components/KnowledgePanel";
 import MessageList from "../components/MessageList";
+import OrderPanel from "../components/OrderPanel";
 import Sidebar from "../components/Sidebar";
-import TicketPanel from "../components/TicketPanel";
 import { useChat } from "../hooks/useChat";
 import { useConversations } from "../hooks/useConversations";
 import { PENDING_QUESTION_KEY, PROMPTS } from "../prompts";
 import { navigate } from "../router";
-import type { AgentInfo, ChatPanel, Conversation, KnowledgeHit, Ticket } from "../types";
+import type { AgentInfo, ChatPanel, Conversation, KnowledgeHit } from "../types";
 
 export interface ChatPageProps {
   info: AgentInfo | null;
@@ -27,11 +27,8 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
   const [panel, setPanel] = useState<ChatPanel>(initialPanel);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [focusedTurnKey, setFocusedTurnKey] = useState<string | null>(null);
-  const [allTickets, setAllTickets] = useState<Ticket[] | null>(null);
-  const [ticketsLoading, setTicketsLoading] = useState(false);
   const [knowledgeOverride, setKnowledgeOverride] = useState<{ key: string; hits: KnowledgeHit[] } | null>(null);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   const pendingSent = useRef(false);
   const restored = useRef(false);
@@ -46,12 +43,10 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
     return last?.key ?? null;
   }, [messages]);
 
-  // 新的一轮开始：面板回到「本轮」，清掉上一轮的重查结果与「全部工单」模式
+  // 新的一轮开始：面板回到「本轮」，清掉上一轮的重查结果
   useEffect(() => {
     setFocusedTurnKey(lastAiKey);
-    setAllTickets(null);
     setKnowledgeOverride(null);
-    setSelectedTicketId(null);
   }, [lastAiKey]);
 
   const turn = useMemo(() => {
@@ -89,17 +84,6 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
       setKnowledgeLoading(false);
     }
   }, [turn]);
-
-  const loadAllTickets = useCallback(async () => {
-    setTicketsLoading(true);
-    try {
-      setAllTickets(await listTickets());
-    } catch {
-      setAllTickets([]);
-    } finally {
-      setTicketsLoading(false);
-    }
-  }, []);
 
   // 首页带过来的问题：进入对话页后自动发一次
   useEffect(() => {
@@ -149,10 +133,9 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
     navigate(value === "none" ? "/chat" : `/chat?panel=${value}`);
   };
 
-  /** 点击历史消息里的引用/工单标签：把右侧面板切到那一轮 */
-  const focusTurn = (messageKey: string, target: "knowledge" | "tickets") => {
+  /** 点击历史消息里的引用/订单标签：把右侧面板切到那一轮 */
+  const focusTurn = (messageKey: string, target: "knowledge" | "orders") => {
     setFocusedTurnKey(messageKey);
-    setAllTickets(null);
     setKnowledgeOverride(null);
     setPanel(target);
     navigate(`/chat?panel=${target}`);
@@ -161,15 +144,12 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
   const selectConversation = (conversation: Conversation) => {
     hydrate(conversation.messages, conversation.threadId);
     setActiveId(conversation.id);
-    setSelectedTicketId(null);
   };
 
   const startNewChat = () => {
     reset();
     setActiveId(null);
-    setSelectedTicketId(null);
     setFocusedTurnKey(null);
-    setAllTickets(null);
     setKnowledgeOverride(null);
   };
 
@@ -201,8 +181,8 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
           <button type="button" className={panel === "knowledge" ? "toggle active" : "toggle"} onClick={() => openPanel("knowledge")}>
             知识库
           </button>
-          <button type="button" className={panel === "tickets" ? "toggle active" : "toggle"} onClick={() => openPanel("tickets")}>
-            售后工单
+          <button type="button" className={panel === "orders" ? "toggle active" : "toggle"} onClick={() => openPanel("orders")}>
+            订单
           </button>
         </header>
 
@@ -215,7 +195,7 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
                     <RobotOutlined />
                   </span>
                   <h2>有什么可以帮您？</h2>
-                  <p>订单、物流、退换与发票问题可以问我，也可以让我创建售后工单。</p>
+                  <p>订单、物流、退换与发票问题可以问我，也可以直接查订单进度。</p>
                   <div className="prompt-row">
                     {PROMPTS.map((prompt) => (
                       <button type="button" key={prompt} className="prompt-chip" onClick={() => submit(prompt)}>
@@ -225,11 +205,7 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
                   </div>
                 </div>
               ) : (
-                <MessageList
-                  messages={messages}
-                  onFocusTurn={focusTurn}
-                  onOpenTicket={(ticketId) => setSelectedTicketId(ticketId)}
-                />
+                <MessageList messages={messages} onFocusTurn={focusTurn} />
               )}
             </div>
             <div className="composer-wrap">
@@ -253,18 +229,8 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
               onRefresh={() => void refreshKnowledge()}
             />
           )}
-          {panel === "tickets" && (
-            <TicketPanel
-              mode={allTickets ? "all" : "turn"}
-              tickets={allTickets ?? turn?.ai.tickets ?? []}
-              question={turn?.question ?? ""}
-              loading={ticketsLoading}
-              selectedId={selectedTicketId}
-              onSelect={setSelectedTicketId}
-              onLoadAll={() => void loadAllTickets()}
-              onReloadAll={() => void loadAllTickets()}
-              onExitAll={() => setAllTickets(null)}
-            />
+          {panel === "orders" && (
+            <OrderPanel orders={turn?.ai.orders ?? []} question={turn?.question ?? ""} />
           )}
         </div>
       </div>

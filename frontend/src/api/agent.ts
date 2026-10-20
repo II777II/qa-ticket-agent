@@ -12,6 +12,7 @@ import type {
   KnowledgeHit,
   MetricsSummary,
   OrderRecord,
+  OrderSummary,
   StreamHandlers,
   Ticket,
 } from "../types";
@@ -179,6 +180,9 @@ function dispatch(
       break;
     case "ticket":
       handlers.onTicket?.((payload.tickets ?? []) as Ticket[]);
+      break;
+    case "order":
+      handlers.onOrder?.((payload.orders ?? []) as unknown as OrderSummary[]);
       break;
     case "citation":
       handlers.onCitation?.({

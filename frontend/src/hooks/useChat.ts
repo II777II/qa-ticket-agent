@@ -7,14 +7,14 @@
 import { useCallback, useRef, useState } from "react";
 
 import { streamChat } from "../api/agent";
-import type { ChatMessage, Ticket, ToolCallView, ToolEvent } from "../types";
+import type { ChatMessage, OrderSummary, Ticket, ToolCallView, ToolEvent } from "../types";
 
 function newKey(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
 function emptyMessage(role: ChatMessage["role"], key: string): ChatMessage {
-  return { key, role, content: "", tools: [], tickets: [], citations: [] };
+  return { key, role, content: "", tools: [], tickets: [], orders: [], citations: [] };
 }
 
 /** 工具事件落成界面条目：call 新建一条，result 挂到同名的那条上 */
@@ -36,6 +36,12 @@ function mergeTickets(current: Ticket[], incoming: Ticket[]): Ticket[] {
   const byId = new Map(current.map((ticket) => [ticket.id, ticket]));
   incoming.forEach((ticket) => byId.set(ticket.id, ticket));
   return [...byId.values()];
+}
+
+function mergeOrders(current: OrderSummary[] = [], incoming: OrderSummary[]): OrderSummary[] {
+  const byNo = new Map(current.map((order) => [order.order_no, order]));
+  incoming.forEach((order) => byNo.set(order.order_no, order));
+  return [...byNo.values()];
 }
 
 export interface UseChatResult {
@@ -90,6 +96,8 @@ export function useChat(): UseChatResult {
               patch((message) => ({ ...message, loading: false, tickets: mergeTickets(message.tickets, tickets) }));
               onTicket?.(tickets);
             },
+            onOrder: (orders) =>
+              patch((message) => ({ ...message, loading: false, orders: mergeOrders(message.orders, orders) })),
             onCitation: (citation) =>
               patch((message) => ({ ...message, citations: [...message.citations, citation] })),
             onError: (error) =>

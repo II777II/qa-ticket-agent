@@ -22,12 +22,11 @@ function body(message: ChatMessage) {
 
 export interface MessageListProps {
   messages: ChatMessage[];
-  onOpenTicket?: (ticketId: string) => void;
   /** 把右侧面板切到「这一轮」的知识库/工单结果 */
-  onFocusTurn?: (messageKey: string, panel: "knowledge" | "tickets") => void;
+  onFocusTurn?: (messageKey: string, panel: "knowledge" | "orders") => void;
 }
 
-export default function MessageList({ messages, onOpenTicket, onFocusTurn }: MessageListProps) {
+export default function MessageList({ messages, onFocusTurn }: MessageListProps) {
   const items = messages.map((message) => ({
     key: message.key,
     role: message.role,
@@ -51,19 +50,16 @@ export default function MessageList({ messages, onOpenTicket, onFocusTurn }: Mes
             ))}
           </div>
         )}
-        {message.tickets.length > 0 && (
+        {(message.orders ?? []).length > 0 && (
           <div className="cite-row">
-            {message.tickets.map((ticket) => (
+            {message.orders.map((order) => (
               <button
-                key={ticket.id}
+                key={order.order_no}
                 type="button"
-                className="cite cite-green"
-                onClick={() => {
-                  onFocusTurn?.(message.key, "tickets");
-                  onOpenTicket?.(ticket.id);
-                }}
+                className="cite cite-order"
+                onClick={() => onFocusTurn?.(message.key, "orders")}
               >
-                🎫 {ticket.id} · {ticket.status}
+                {order.order_no} · {order.status}
               </button>
             ))}
           </div>

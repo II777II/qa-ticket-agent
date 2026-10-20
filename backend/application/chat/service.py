@@ -21,6 +21,7 @@ from backend.application.chat.events import (
     EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,
+    EVENT_ORDER,
     EVENT_START,
     EVENT_TICKET,
     EVENT_TOKEN,
@@ -85,6 +86,9 @@ def _tool_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
             tickets = data.get("tickets") or ([data["ticket"]] if data.get("ticket") else None)
             if tickets:
                 yield EVENT_TICKET, {"tickets": tickets}
+            orders = data.get("orders")
+            if orders:
+                yield EVENT_ORDER, {"orders": orders}
 
 
 def _citation_events(update: Any, announced: set[str]) -> Iterator[tuple[str, dict[str, Any]]]:

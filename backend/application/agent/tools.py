@@ -49,7 +49,7 @@ def _order_summary(order: OrderRecord) -> dict[str, Any]:
     }
 
 
-def create_tools(tickets: TicketService, orders: OrderService) -> list[BaseTool]:
+def create_tools(tickets: TicketService, orders: OrderService, *, include_tickets: bool = True) -> list[BaseTool]:
     """按工单用例创建工具集（依赖注入，避免全局单例）。"""
 
     @tool("create_ticket", args_schema=TicketCreate)
@@ -180,4 +180,7 @@ def create_tools(tickets: TicketService, orders: OrderService) -> list[BaseTool]
             }
         )
 
-    return [create_ticket, query_ticket, escalate_to_human, query_order]
+    # 当前产品只开放「订单查询」；工单工具保留在代码里供后续启用
+    if include_tickets:
+        return [create_ticket, query_ticket, escalate_to_human, query_order]
+    return [query_order]

@@ -9,6 +9,7 @@ import httpx
 
 from backend.api.app import app as api_app
 from backend.application.runtime import AgentRuntime
+from backend.domain import TicketCreate
 
 
 def _client() -> httpx.AsyncClient:
@@ -57,7 +58,8 @@ def test_agent_info_reports_capabilities(isolated_runtime: AgentRuntime) -> None
     assert body["kb_chunks"] >= 100
     assert body["orders"] == 50
     assert body["kb_articles"] == 50
-    assert "tool:create_ticket" in body["extensions"]
+    assert "tool:query_order" in body["extensions"]
+    assert "tool:create_ticket" not in body["extensions"]
     assert body["tickets"] == 0
     assert body["git_sha"]  # 界面要显示版本号
 
@@ -74,10 +76,16 @@ def test_tickets_flow(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
     assert asyncio.run(_get("/api/tickets")).json() == []
 
-    events = asyncio.run(_stream_chat("帮我建个售后工单，商品有质量问题，联系我 li.si@corp.com", "api-1"))
-    tickets = [payload["tickets"][0] for event, payload in events if event == "ticket"]
-    assert tickets, "建单后应收到 ticket 事件"
-    ticket_id = tickets[0]["id"]
+    record, _ = isolated_runtime.tickets.create(
+        TicketCreate(
+            title="商品有质量问题",
+            description="收到的商品外壳有裂痕，需要售后处理。",
+            category="商品与质量",
+            priority="中",
+            contact="li.si@corp.com",
+        )
+    )
+    ticket_id = record.id
 
     listing = asyncio.run(_get("/api/tickets")).json()
     assert len(listing) == 1
@@ -134,13 +142,13 @@ def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
     assert "[1]" in "".join(payload["text"] for name, payload in events if name == "token")
 
 
-def test_chat_sse_tool_and_ticket_events(isolated_runtime: AgentRuntime) -> None:
+def test_chat_does_not_create_tickets(isolated_runtime: AgentRuntime) -> None:
+    """对话侧不再提供售后工单工具。"""
     _prepare(isolated_runtime)
     events = asyncio.run(_stream_chat("帮我建个售后工单，商品有质量问题，联系我 wang.wu@corp.com", "api-3"))
     tools = [(payload["phase"], payload["name"]) for name, payload in events if name == "tool"]
-    assert ("call", "create_ticket") in tools
-    assert ("result", "create_ticket") in tools
-    assert any(name == "ticket" for name, _ in events)
+    assert not any(name == "create_ticket" for _, name in tools)
+    assert not any(name == "ticket" for name, _ in events)
 
 
 def test_chat_rejects_empty_message(isolated_runtime: AgentRuntime) -> None:
@@ -193,5 +201,6 @@ def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
     assert ("call", "query_order") in tools
     assert "citation" not in names
     assert "ticket" not in names
+    assert "order" in names
     text = "".join(payload["text"] for name, payload in events if name == "token")
     assert "SO" in text

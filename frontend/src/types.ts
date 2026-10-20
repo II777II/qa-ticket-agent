@@ -82,6 +82,7 @@ export interface ChatMessage {
   error?: string;
   tools: ToolCallView[];
   tickets: Ticket[];
+  orders: OrderSummary[];
   citations: CitationEvent[];
 }
 
@@ -90,6 +91,7 @@ export interface StreamHandlers {
   onToken?: (text: string) => void;
   onTool?: (event: ToolEvent) => void;
   onTicket?: (tickets: Ticket[]) => void;
+  onOrder?: (orders: OrderSummary[]) => void;
   onCitation?: (event: CitationEvent) => void;
   onDone?: () => void;
   onError?: (event: ErrorEvent) => void;
@@ -147,7 +149,7 @@ export interface Conversation {
 }
 
 export type RoutePage = "home" | "chat" | "orders" | "kb" | "admin";
-export type ChatPanel = "none" | "knowledge" | "tickets";
+export type ChatPanel = "none" | "knowledge" | "orders";
 
 /** ---------------- 电商订单 ---------------- */
 export interface OrderItem {
@@ -221,6 +223,19 @@ export interface OrderRecord {
   status_label: string;
   pay_status_label: string;
   source_label: string;
+}
+
+/** query_order 工具返回的订单摘要（order 事件载荷） */
+export interface OrderSummary {
+  order_no: string;
+  status: string;
+  pay_status: string;
+  customer: string | number;
+  payable_amount: number;
+  paid_amount: number;
+  refund_amount: number;
+  created_at: string;
+  items: { name: string; spec?: string | null; quantity: number; price: number }[];
 }
 
 /** ---------------- 知识库目录 ---------------- */

@@ -73,7 +73,8 @@ def create_runtime() -> AgentRuntime:
     metrics = MetricsCollector()
     orders = OrderService(create_order_store())
     knowledge = KnowledgeService(create_knowledge_catalog())
-    tools = create_tools(tickets, orders)
+    # 对话侧只暴露订单查询；售后工单不再进入 Agent（代码保留，可通过 include_tickets=True 恢复）
+    tools = create_tools(tickets, orders, include_tickets=False)
     retriever = create_retriever()
 
     graph = build_graph(

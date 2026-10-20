@@ -452,6 +452,22 @@ button.cite {
   border-color: rgba(13, 143, 111, 0.25);
 }
 
+.cite-order {
+  color: #0a6b53;
+  background: var(--accent-soft);
+  border-color: rgba(13, 143, 111, 0.25);
+}
+
+.order-mini-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
 /* ---------------- 右侧面板 ---------------- */
 .side-panel {
   width: 380px;

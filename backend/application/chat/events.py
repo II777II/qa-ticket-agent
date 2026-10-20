@@ -4,6 +4,7 @@
     token     模型输出增量
     tool      工具调用与返回
     ticket    产生或查到的工单
+    order     查到的订单（query_order 结果）
     citation  检索引用
     done      一轮结束
     error     出错
@@ -19,5 +20,6 @@ EVENT_TOKEN = "token"
 EVENT_TOOL = "tool"
 EVENT_CITATION = "citation"
 EVENT_TICKET = "ticket"
+EVENT_ORDER = "order"
 EVENT_DONE = "done"
 EVENT_ERROR = "error"
