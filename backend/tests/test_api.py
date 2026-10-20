@@ -53,8 +53,10 @@ def test_health(isolated_runtime: AgentRuntime) -> None:
 def test_agent_info_reports_capabilities(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
     body = asyncio.run(_get("/api/agent-info")).json()
-    assert body["kb_documents"] == 5
-    assert body["kb_chunks"] >= 10
+    assert body["kb_documents"] == 50
+    assert body["kb_chunks"] >= 100
+    assert body["orders"] == 50
+    assert body["kb_articles"] == 50
     assert "tool:create_ticket" in body["extensions"]
     assert body["tickets"] == 0
     assert body["git_sha"]  # 界面要显示版本号
@@ -93,16 +95,16 @@ def test_unknown_ticket_returns_404(isolated_runtime: AgentRuntime) -> None:
 
 def test_kb_search_returns_hits(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
-    body = asyncio.run(_get("/api/kb/search?q=VPN%20691&top_k=2")).json()
+    body = asyncio.run(_get("/api/kb/search?q=%E9%80%80%E6%AC%BE%E5%88%B0%E8%B4%A6&top_k=2")).json()
     assert body
-    assert body[0]["source"] == "vpn-691.md"
+    assert body[0]["source"] == "KB-EC-0020.html"
     assert body[0]["score"] is not None
     assert len(body) <= 2
 
 
 def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
-    asyncio.run(_stream_chat("VPN 连不上怎么办？", "api-metrics"))
+    asyncio.run(_stream_chat("退款多久到账？", "api-metrics"))
 
     summary = asyncio.run(_get("/api/metrics/summary?days=1")).json()
     kpis = summary["kpis"]
@@ -117,7 +119,7 @@ def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
 def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
     """咨询类问题的事件序列：start → token… → citation… → done，且不建单。"""
     _prepare(isolated_runtime)
-    events = asyncio.run(_stream_chat("VPN 连不上，提示 691 怎么办？", "api-2"))
+    events = asyncio.run(_stream_chat("退款多久到账？", "api-2"))
     names = [name for name, _ in events]
 
     assert names[0] == "start"
@@ -151,3 +153,33 @@ def test_chat_rejects_empty_message(isolated_runtime: AgentRuntime) -> None:
             return response.status_code
 
     assert asyncio.run(post()) == 422
+
+
+def test_orders_api(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    listing = asyncio.run(_get("/api/orders?limit=5")).json()
+    assert len(listing) == 5
+    order_no = listing[0]["order_no"]
+    assert order_no.startswith("SO")
+    assert listing[0]["status_label"]
+
+    detail = asyncio.run(_get(f"/api/orders/{order_no.lower()}"))
+    assert detail.status_code == 200
+    assert detail.json()["order_no"] == order_no
+    assert detail.json()["items"]
+
+    missing = asyncio.run(_get("/api/orders/SO197001019999"))
+    assert missing.status_code == 404
+
+
+def test_kb_article_catalog(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    categories = asyncio.run(_get("/api/kb/categories")).json()
+    assert len(categories) == 8
+
+    articles = asyncio.run(_get("/api/kb/articles?category=AFTERSALE")).json()
+    assert articles and all(item["category_code"] == "AFTERSALE" for item in articles)
+
+    detail = asyncio.run(_get(f"/api/kb/articles/{articles[0]['article_no']}"))
+    assert detail.status_code == 200
+    assert detail.json()["url"].startswith("/kb/pages/")

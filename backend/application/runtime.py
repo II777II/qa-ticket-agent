@@ -15,12 +15,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.application.agent import build_graph, create_tools
+from backend.application.knowledge import KnowledgeService
+from backend.application.orders import OrderService
 from backend.application.tickets import TicketService
 from backend.infrastructure.config import settings
 from backend.infrastructure.llm import create_llm
 from backend.infrastructure.memory import create_checkpointer
 from backend.infrastructure.observability import MetricsCollector
 from backend.infrastructure.persistence import create_ticket_store
+from backend.infrastructure.persistence.factory import create_knowledge_catalog, create_order_store
 from backend.infrastructure.retrieval import create_retriever
 
 logger = logging.getLogger("qa_ticket.runtime")
@@ -34,6 +37,8 @@ class AgentRuntime:
     llm: Any
     tickets: TicketService
     metrics: MetricsCollector
+    orders: OrderService
+    knowledge: KnowledgeService
     tools: list[Any] = field(default_factory=list)
     retriever: Any | None = None
     checkpointer: Any | None = None
@@ -46,6 +51,8 @@ class AgentRuntime:
             "model": settings.llm_model or "",
             "tools": [getattr(tool, "name", str(tool)) for tool in self.tools],
             "tickets": self.tickets.count(),
+            "orders": self.orders.count(),
+            "kb_articles": self.knowledge.count(),
             "kb_documents": self.retriever.document_count() if hasattr(self.retriever, "document_count") else 0,
             "kb_chunks": self.retriever.chunk_count() if hasattr(self.retriever, "chunk_count") else 0,
             "checkpointer": settings.checkpointer if self.checkpointer else None,
@@ -64,6 +71,8 @@ def create_runtime() -> AgentRuntime:
     store = create_ticket_store()
     tickets = TicketService(store)
     metrics = MetricsCollector()
+    orders = OrderService(create_order_store())
+    knowledge = KnowledgeService(create_knowledge_catalog())
     tools = create_tools(tickets)
     retriever = create_retriever()
 
@@ -90,6 +99,8 @@ def create_runtime() -> AgentRuntime:
         llm=llm,
         tickets=tickets,
         metrics=metrics,
+        orders=orders,
+        knowledge=knowledge,
         tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,

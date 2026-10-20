@@ -50,10 +50,10 @@ def test_tool_branch_creates_ticket(store: JsonTicketStore) -> None:
 
 def test_retrieved_fragments_recorded_in_state(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:
     graph, _ = _build(store, retriever)
-    state = graph.invoke({"messages": [HumanMessage(content="VPN 报 691 怎么办？")]}, {"configurable": {"thread_id": "t3"}})
+    state = graph.invoke({"messages": [HumanMessage(content="退款多久到账？")]}, {"configurable": {"thread_id": "t3"}})
     citations = state["retrieved"]
     assert citations
-    assert citations[0]["source"] == "vpn-691.md"
+    assert citations[0]["source"] == "KB-EC-0020.html"
     assert citations[0]["index"] == 1
     assert 0 < len(citations[0]["snippet"]) <= 160
 
@@ -62,7 +62,7 @@ def test_context_injected_into_system_prompt(store: JsonTicketStore, retriever: 
     """系统提示里必须带参考资料块，否则模型无从引用。"""
     from backend.application.agent.graph import _prepare_messages
 
-    messages, citations = _prepare_messages([HumanMessage(content="账号被锁了怎么办")], retriever, "系统提示")
+    messages, citations = _prepare_messages([HumanMessage(content="退款多久到账")], retriever, "系统提示")
     assert isinstance(messages[0], SystemMessage)
     assert CONTEXT_HEADER in messages[0].content
     assert "系统提示" in messages[0].content

@@ -45,11 +45,25 @@ docker compose -f docker/docker-compose.yml up -d --build
 | --- | --- | --- | --- |
 | 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `infrastructure/memory/factory.py` 已留分支 |
 | 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 新增 `infrastructure/persistence/postgres_store.py`，满足 `application/tickets/service.py` 的 `TicketStore` 协议 |
+| 订单入库 | `sqlalchemy`、`psycopg[binary]` | `ORDER_STORE=postgres` | 按 `docs/sql/postgres_schema.sql` 建表，新增 `postgres_order_store.py` 满足 `OrderStore` 协议 |
 | 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | 新增 `infrastructure/retrieval/pgvector.py` |
 | 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `infrastructure/llm/factory.py` 加分支 |
 | 会话缓存 / 限流 | `redis` | `REDIS_URL=...` | 新增 |
 
 每个分支现在都会抛一个说明性错误（告诉你缺哪个包、要开哪个服务），不会静默降级。
+
+## 电商演示数据
+
+订单与知识库数据由生成器产出（固定种子，可重复）：
+
+```powershell
+python -m backend.scripts.generate_ecommerce_demo
+```
+
+- 50 条订单（8 种状态）+ 明细/地址/支付/退款/状态日志/库存；
+- 50 篇 HTML 知识页（8 个分类）+ 文章索引 + 可直接浏览的目录页；
+- 文件位置与导入步骤见 [ecommerce-demo-data.md](ecommerce-demo-data.md)；
+- Postgres 目标结构见 [sql/postgres_schema.sql](sql/postgres_schema.sql)（订单 8 表 + 知识库 7 表）。
 
 ## 日志与排查
 

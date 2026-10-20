@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 # 本文件位于 backend/infrastructure/，包根要上跳一层，否则数据目录会指到 infrastructure/ 里
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_DIR.parent
+DEFAULT_DEMO_DIR = BACKEND_DIR / "data" / "demo" / "ecommerce"
 
 # .env 放在项目根目录，进程启动时加载一次
 load_dotenv(PROJECT_ROOT / ".env")
@@ -76,13 +77,27 @@ class Settings:
     checkpointer: str = _env("CHECKPOINTER", "memory").lower()
     retriever: str = _env("RETRIEVER", "memory").lower()
     ticket_store: str = _env("TICKET_STORE", "json").lower()
+    order_store: str = _env("ORDER_STORE", "json").lower()
 
     # ---------- 数据落点 ----------
     data_dir: Path = field(
         default_factory=lambda: Path(_env("DATA_DIR", str(BACKEND_DIR / "data")))
     )
+    # 电商演示数据：订单 JSON + HTML 知识库（后续换 Postgres 时这里只是导入源）
+    demo_data_dir: Path = field(
+        default_factory=lambda: Path(_env("DEMO_DATA_DIR", str(DEFAULT_DEMO_DIR)))
+    )
+    orders_file: Path = field(
+        default_factory=lambda: Path(_env("ORDERS_FILE", str(DEFAULT_DEMO_DIR / "orders.json")))
+    )
+    kb_root: Path = field(
+        default_factory=lambda: Path(_env("KB_ROOT", str(DEFAULT_DEMO_DIR / "kb")))
+    )
     kb_dir: Path = field(
-        default_factory=lambda: Path(_env("KB_DIR", str(BACKEND_DIR / "data" / "kb")))
+        default_factory=lambda: Path(_env("KB_DIR", str(DEFAULT_DEMO_DIR / "kb" / "pages")))
+    )
+    kb_articles_file: Path = field(
+        default_factory=lambda: Path(_env("KB_ARTICLES_FILE", str(DEFAULT_DEMO_DIR / "kb" / "articles.json")))
     )
     # 前端构建产物：存在时后端直接同源托管，现场演示只开一个地址（默认 5179）
     frontend_dist: Path = field(

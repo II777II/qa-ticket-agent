@@ -1,7 +1,7 @@
-# 企业IT服务台 智能问答工单 Agent POC
+# 电商智能助手 POC（订单查询 + 知识库问答 + 售后工单）
 
-用一句话说清楚这件事：员工用日常语言描述问题 → Agent 先查知识库给答案并标出处 →
-知识库解决不了或用户明确要求时，自动整理字段建工单 → 之后能查进度、补信息、转人工。
+用一句话说清楚这件事：用户用日常语言描述问题 → Agent 先查电商知识库给答案并标出处 →
+订单/物流/售后问题可转到订单查询与售后工单 → 平台另提供独立的订单查询页与知识库检索页。
 
 > 状态：五个阶段全部完成——后端链路、工单工具、前端对话页、RAG 引用、演示文档与联调。
 > 文档见 [docs/](docs/architecture.md)：架构与执行路径、演示脚本与话术、追问应对、运行与部署。
@@ -16,8 +16,11 @@
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
 | 工具调用 | `create_ticket` / `query_ticket` / `escalate_to_human` | 已就绪 |
-| 简易 RAG | 进程内检索 + 5 篇文档 + 引用 | 已就绪 |
+| 简易 RAG | 进程内检索 + 50 篇电商 HTML + 引用 | 已就绪（HTML 按 h2 切块） |
+| 订单查询 | JSON 演示数据（50 单，按 Postgres 表形状） | 已就绪（`#/orders`） |
+| 知识库 | 50 篇 HTML 文章 + 分类/标签目录 | 已就绪（`#/kb`） |
 | 工单存储 | JSON 文件（`backend/data/tickets.json`） | 已就绪 |
+| 订单存储 | JSON 演示数据（字段按 Postgres 表形状） | 已就绪，`ORDER_STORE=postgres` 为升级开关 |
 | 部署 | 本地 uvicorn + `npm run dev`；Docker Compose 预留 | docker/ 目录已放好落点 |
 
 四个扩展点（LLM / 工具 / 记忆 / 检索）都走工厂 + 配置，业务代码只依赖 LangChain 标准接口，
@@ -32,12 +35,12 @@ pip install -r requirements.txt
 Copy-Item .env.example .env      # 什么都不填也能跑（演示模式）
 
 # 命令行验收：能流式输出回答即通过
-python -m backend.scripts.cli_chat --once "VPN 连不上怎么办"
+python -m backend.scripts.cli_chat --once "退款多久到账？"
 
 # 走一遍「问答 → 建单 → 查进度 → 转人工」（演示模式下也能跑）
 python -m backend.scripts.cli_chat
-#   你 > VPN 连不上，报错 691 怎么处理        <- 只咨询，不该建单
-#   你 > 帮我建个工单，整个部门都连不上，联系我 zhang.san@corp.com
+#   你 > 退款多久到账                          <- 只咨询，不该建单
+#   你 > 帮我建个工单，商品有质量问题，联系我 zhang.san@corp.com
 #   你 > TK-20261016-0001 处理到哪了
 #   你 > TK-20261016-0001 帮我转人工
 python -m backend.scripts.cli_chat --tickets     # 看当前工单列表
@@ -77,7 +80,13 @@ python -m uvicorn backend.api.app:app --port 5179
 | GET | `/api/tickets` | 工单列表，支持 `status` / `contact` / `limit` 过滤（阶段三看板用） |
 | GET | `/api/tickets/{id}` | 工单详情，含时间线 |
 | GET | `/api/kb/search?q=&top_k=` | 知识库检索命中（来源、小节、片段、相关度），供右侧知识面板 |
+| GET | `/api/kb/articles?q=&category=` | 知识库文章列表（目录/分类/关键字） |
+| GET | `/api/kb/categories` | 知识库分类 |
+| GET | `/api/kb/articles/{article_no}` | 文章元信息（含 HTML 页面 URL） |
 | GET | `/api/metrics/summary?days=7` | 运营指标：Token、首字延迟、请求量、错误率、按天趋势、模型明细 |
+| GET | `/api/orders?q=&status=&user_id=` | 电商订单查询（50 条演示订单） |
+| GET | `/api/orders/{order_no}` | 订单详情（明细、地址、支付、退款、状态时间线） |
+| GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
 工单落在 `backend/data/tickets.json`（可用 `DATA_DIR` 指向别处）：建单用「临时文件 + 原子替换」
 写盘，同一联系人 + 同标题 + 未关闭的重复建单会被拦下、返回已有工单。
@@ -92,6 +101,8 @@ python -m uvicorn backend.api.app:app --port 5179
 | `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，工具链/引用/工单标签渲染在气泡底部 |
 | `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出**这一轮**问答的 Top-K 检索命中（来源、小节、相关度、片段） |
 | `#/chat?panel=tickets` | 对话 + 工单 | 右侧显示**这一轮**产生/查询到的工单；可显式切换「查询全部」+ 详情抽屉（时间线） |
+| `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
+| `#/kb` | 知识库检索 | 8 个分类浏览 50 篇 HTML；关键词检索 + RAG 命中片段，点击打开 HTML 原文 |
 | `#/admin` | 后台管理 | Token 消耗、平均首字延迟、请求总量、错误率、7 天趋势、模型调用明细 |
 
 会话历史存在浏览器 localStorage（POC 不做服务端会话列表）；后台指标为进程内统计，重启清零。
@@ -104,7 +115,7 @@ python -m uvicorn backend.api.app:app --port 5179
 ## 测试
 
 ```powershell
-python -m pytest            # 50 个用例，约 9 秒
+python -m pytest            # 81 个用例，约 10 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -128,12 +139,23 @@ PNG 先试 mermaid.ink，失败就用本机 Chrome/Edge 离线渲染并裁掉空
 
 ## 知识库与检索（RAG）
 
-知识库是 `backend/data/kb/` 下的 5 篇 IT 服务台文档（VPN 报错、账号密码、打印机驱动、
-邮箱容量、工单 SLA），改了 `.md` 重启后端即生效；`README.md` 不会被当作知识读入。
+知识库是 `backend/data/demo/ecommerce/kb/pages/` 下的 50 篇电商帮助中心 HTML 页面
+（下单支付、配送物流、退换售后、发票、会员、账户、商品、商家规则），
+`articles.json` 是文章索引与分类，`index.html` 是可直接浏览的目录页。
+检索器同时支持 `.md`、`.txt` 与 `.html`，HTML 按 `<h2>` 切块、去标签后参与打分。
+
+电商订单与知识库数据由固定种子的生成器产出：
+
+```powershell
+python -m backend.scripts.generate_ecommerce_demo
+```
+
+数据说明见 [docs/ecommerce-demo-data.md](docs/ecommerce-demo-data.md)；Postgres 目标结构见
+[docs/sql/postgres_schema.sql](docs/sql/postgres_schema.sql)（订单 8 表 + 知识库 7 表）。
 
 检索实现（[backend/infrastructure/retrieval/in_memory.py](backend/infrastructure/retrieval/in_memory.py)）刻意做成零依赖、可解释：
 
-1. 按 Markdown 二级标题切小节（`# 标题` 当文档名，`## 小节` 当片段）；
+1. Markdown 按 `##` 切小节；HTML 按 `<h2>` 切块并去掉标签；
 2. 查询与片段都按「英文单词 + 中文二元组」切词；
 3. 用 IDF 加权词频打分，除以片段长度平方根（防止长小节占便宜），取 `RAG_TOP_K`（默认 3）条；
 4. 低于 `min_score` 视为没检到——此时不注入任何资料，模型会说「知识库里没有这个流程」。
@@ -155,30 +177,32 @@ backend/
     agent/             Agent 关注点：graph.py（编排）、tools.py（工具适配）、prompts.py（提示词）
     chat/service.py    用例：一轮对话（驱动图 + 翻译成 token/tool/ticket/citation 事件）
     tickets/service.py 用例：建单 / 查进度 / 催单 / 转人工
+    orders/service.py  用例：电商订单查询
+    knowledge/service.py 用例：知识库目录浏览/搜索
   infrastructure/      基础设施层
     config.py          集中配置，决定用哪个实现
     logging.py         日志初始化（手写 Handler，避免 basicConfig 静默失效）
     llm/               模型工厂 + 演示模式假模型
     memory/            短期记忆（checkpointer）工厂
     retrieval/         进程内检索（切块 + IDF 打分 + 拼参考资料）与工厂
-    persistence/       工单 JSON 存储与工厂
+    persistence/       工单/订单 JSON 存储、知识库目录与工厂
   api/                 接口层
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
     deps.py            依赖取用点（从 app.state 取运行时与用例）
-    routes/            chat.py / tickets.py / system.py
+    routes/            chat.py / tickets.py / orders.py / knowledge.py / metrics.py / system.py
     schemas.py         请求响应模型与 SSE 编码
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
-  data/kb/             知识库文档
+  data/demo/ecommerce/ 50 条订单 + 50 篇 HTML 知识库（含 tables/ 与 kb/）
 frontend/
   vite.config.ts       代理到后端 + 固定 127.0.0.1（避开 localhost→::1 连不上的坑）
   src/main.tsx         React 挂载 + 浅色主题 token + antd 中文 locale + XProvider
-  src/router.ts        hash 路由（#/、#/chat、#/admin）
+  src/router.ts        hash 路由（#/、#/chat、#/orders、#/kb、#/admin）
   src/App.tsx          路由分发 + 后端信息 + 离线提示
-  src/pages/           HomePage（第 1 屏）/ ChatPage（第 2~4 屏）/ AdminPage（第 5 屏）
+  src/pages/           HomePage / ChatPage / OrdersPage / KnowledgePage / AdminPage
   src/components/      Sidebar / Composer / MessageList / KnowledgePanel / TicketPanel
-                       / KpiCard / TrendChart / VersionBadge
+                       / KpiCard / TrendChart / VersionBadge / SiteSidebar
   src/hooks/           useChat（流式与会话恢复）、useConversations（localStorage 历史）
   src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单/知识库/指标查询
   src/types.ts         与后端 schemas.py 对应的类型

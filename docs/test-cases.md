@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（50 个，`backend/tests/`）——跑一条命令就能验证后端链路，含检索、存储、工具、编排、接口、整链；
+- **自动化用例**（81 个，`backend/tests/`）——后端链路、订单/知识库数据、检索、存储、工具、编排、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 50 passed in ~9s
+python -m pytest              # 81 passed in ~10s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -114,6 +114,8 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | M-13 | 工单查询面板 | 点顶栏「工单」；再点「查询全部」 | 默认只显示本轮产生/查询到的工单；「查询全部」才请求全量并可按单号/联系人/状态过滤；点卡片打开时间线 |
 | M-14 | 后台指标页 | 跑几轮对话后打开 `#/admin` | Token、首字延迟、请求量、错误率、7 天趋势、模型明细有数据；刷新按钮生效 |
 | M-15 | 版本徽标 | 查看首页右上角/侧栏底部 | 显示当前 git 短 hash，可与提交记录对照 |
+| M-16 | 订单查询页 | 打开 `#/orders`，按订单号/状态过滤并点开一条订单 | 列表即时过滤；右侧显示地址、商品明细、金额、支付/退款与状态时间线 |
+| M-17 | 知识库检索页 | 打开 `#/kb`，输入「退款到账」并切换分类 | 文章列表与 RAG 命中同时更新；点击文章在新标签打开对应 HTML 页面 |
 
 ## 八、需求 → 用例覆盖
 

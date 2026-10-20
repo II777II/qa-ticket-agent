@@ -19,7 +19,15 @@ export function parseRoute(hash: string): AppRoute {
   const raw = hash.replace(/^#/, "") || "/";
   const [path, query = ""] = raw.split("?");
   const panel = new URLSearchParams(query).get("panel");
-  const page: RoutePage = path.startsWith("/admin") ? "admin" : path.startsWith("/chat") ? "chat" : "home";
+  const page: RoutePage = path.startsWith("/admin")
+    ? "admin"
+    : path.startsWith("/orders")
+      ? "orders"
+      : path.startsWith("/kb")
+        ? "kb"
+        : path.startsWith("/chat")
+          ? "chat"
+          : "home";
   return {
     page,
     panel: panel === "knowledge" || panel === "tickets" ? panel : "none",

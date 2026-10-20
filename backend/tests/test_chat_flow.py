@@ -34,7 +34,7 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     thread = "flow-1"
 
     # 1. 知识库问答：有引用、不建单
-    consulted = _turn(runtime, "VPN 连不上，提示 691 错误怎么办？", thread)
+    consulted = _turn(runtime, "退款多久到账？", thread)
     assert not consulted["errors"]
     assert consulted["citations"], "应命中知识库并回传引用"
     assert "[1]" in consulted["text"]
@@ -61,7 +61,7 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     assert escalated["tickets"][0]["status"] == "处理中"
 
     # 5. 多轮追问：上下文累积且仍能检索
-    followup = _turn(runtime, "那第 2 步里用户名该写成什么格式？", thread)
+    followup = _turn(runtime, "那退款失败会怎么处理？", thread)
     assert followup["citations"], "追问同样应命中知识库"
     state = asyncio.run(runtime.graph.aget_state({"configurable": {"thread_id": thread}})).values
     assert len(state["messages"]) >= 8

@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.api.routes import chat as chat_routes
 from backend.api.routes import knowledge as knowledge_routes
 from backend.api.routes import metrics as metrics_routes
+from backend.api.routes import orders as order_routes
 from backend.api.routes import system as system_routes
 from backend.api.routes import tickets as ticket_routes
 from backend.application.runtime import create_runtime
@@ -54,6 +55,7 @@ def create_app() -> FastAPI:
     app.include_router(system_routes.router)
     app.include_router(chat_routes.router)
     app.include_router(ticket_routes.router)
+    app.include_router(order_routes.router)
     app.include_router(knowledge_routes.router)
     app.include_router(metrics_routes.router)
 
@@ -61,6 +63,10 @@ def create_app() -> FastAPI:
     assets_dir = settings.frontend_dist / "assets"
     if assets_dir.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    # 知识库 HTML 页面：/kb/index.html 与 /kb/pages/KB-EC-0001.html
+    if settings.kb_root.is_dir():
+        app.mount("/kb", StaticFiles(directory=settings.kb_root), name="kb")
 
     return app
 

@@ -55,10 +55,13 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     from langgraph.checkpoint.memory import InMemorySaver
 
     from backend.application.agent import build_graph, create_tools
+    from backend.application.knowledge import KnowledgeService
+    from backend.application.orders import OrderService
     from backend.application.tickets import TicketService
     from backend.infrastructure.config import settings
     from backend.infrastructure.llm.mock import FakeChatModel
     from backend.infrastructure.observability import MetricsCollector
+    from backend.infrastructure.persistence.factory import create_knowledge_catalog, create_order_store
 
     llm = FakeChatModel()
     store = JsonTicketStore(store_path)
@@ -72,6 +75,8 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
         llm=llm,
         tickets=tickets,
         metrics=MetricsCollector(),
+        orders=OrderService(create_order_store()),
+        knowledge=KnowledgeService(create_knowledge_catalog()),
         tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,

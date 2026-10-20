@@ -5,7 +5,16 @@
  * 只改这个文件，页面组件不用动。
  */
 
-import type { AgentInfo, KnowledgeHit, MetricsSummary, StreamHandlers, Ticket } from "../types";
+import type {
+  AgentInfo,
+  KnowledgeArticle,
+  KnowledgeCategory,
+  KnowledgeHit,
+  MetricsSummary,
+  OrderRecord,
+  StreamHandlers,
+  Ticket,
+} from "../types";
 
 /** 默认空字符串 = 同源（走 Vite 代理）。需要直连后端时设 VITE_API_BASE=http://127.0.0.1:5179 */
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -47,6 +56,31 @@ export function searchKnowledge(query: string, topK = 5): Promise<KnowledgeHit[]
 
 export function getMetrics(days = 7): Promise<MetricsSummary> {
   return requestJson<MetricsSummary>(`/api/metrics/summary?days=${days}`);
+}
+
+export function listOrders(params: { q?: string; status?: number; user_id?: number; limit?: number }): Promise<OrderRecord[]> {
+  const search = new URLSearchParams();
+  if (params.q) search.set("q", params.q);
+  if (params.status !== undefined) search.set("status", String(params.status));
+  if (params.user_id !== undefined) search.set("user_id", String(params.user_id));
+  search.set("limit", String(params.limit ?? 20));
+  return requestJson<OrderRecord[]>(`/api/orders?${search.toString()}`);
+}
+
+export function getOrder(orderNo: string): Promise<OrderRecord> {
+  return requestJson<OrderRecord>(`/api/orders/${encodeURIComponent(orderNo)}`);
+}
+
+export function listArticles(params: { q?: string; category?: string; limit?: number }): Promise<KnowledgeArticle[]> {
+  const search = new URLSearchParams();
+  if (params.q) search.set("q", params.q);
+  if (params.category) search.set("category", params.category);
+  search.set("limit", String(params.limit ?? 50));
+  return requestJson<KnowledgeArticle[]>(`/api/kb/articles?${search.toString()}`);
+}
+
+export function listCategories(): Promise<KnowledgeCategory[]> {
+  return requestJson<KnowledgeCategory[]>("/api/kb/categories");
 }
 
 /** 把一段 SSE 报文拆成事件名与 JSON 载荷 */

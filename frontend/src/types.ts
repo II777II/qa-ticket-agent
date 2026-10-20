@@ -146,5 +146,104 @@ export interface Conversation {
   messages: ChatMessage[];
 }
 
-export type RoutePage = "home" | "chat" | "admin";
+export type RoutePage = "home" | "chat" | "orders" | "kb" | "admin";
 export type ChatPanel = "none" | "knowledge" | "tickets";
+
+/** ---------------- 电商订单 ---------------- */
+export interface OrderItem {
+  product_name: string;
+  sku_spec?: string | null;
+  product_img?: string | null;
+  price: number;
+  quantity: number;
+  item_amount: number;
+  discount_amount?: number;
+  payable_amount: number;
+}
+
+export interface OrderAddress {
+  receiver_name: string;
+  receiver_phone: string;
+  province: string;
+  city: string;
+  district: string;
+  detail_address: string;
+}
+
+export interface OrderPayment {
+  payment_no: string;
+  channel_name?: string | null;
+  amount: number;
+  status: number;
+  paid_at?: string | null;
+}
+
+export interface OrderRefund {
+  refund_no: string;
+  amount: number;
+  reason?: string | null;
+  status: number;
+  refunded_at?: string | null;
+}
+
+export interface OrderStatusLog {
+  from_status: number;
+  to_status: number;
+  remark: string;
+  created_at: string;
+}
+
+export interface OrderRecord {
+  id: number;
+  order_no: string;
+  user_id: number;
+  order_status: number;
+  pay_status: number;
+  source: number;
+  total_amount: number;
+  discount_amount: number;
+  freight_amount: number;
+  payable_amount: number;
+  paid_amount: number;
+  refund_amount: number;
+  remark: string;
+  created_at: string;
+  updated_at: string;
+  pay_time?: string | null;
+  finish_time?: string | null;
+  cancel_time?: string | null;
+  user?: { id: number; name: string; phone: string } | null;
+  items: OrderItem[];
+  address?: OrderAddress | null;
+  payments: OrderPayment[];
+  refunds: OrderRefund[];
+  status_logs: OrderStatusLog[];
+  status_label: string;
+  pay_status_label: string;
+  source_label: string;
+}
+
+/** ---------------- 知识库目录 ---------------- */
+export interface KnowledgeArticle {
+  id: number;
+  article_no: string;
+  title: string;
+  summary: string;
+  category_id: number;
+  category_code: string;
+  category_name: string;
+  article_type: number;
+  tags: string[];
+  is_top: number;
+  publish_time?: string | null;
+  updated_at?: string | null;
+  url: string;
+  view_count: number;
+}
+
+export interface KnowledgeCategory {
+  id: number;
+  name: string;
+  code: string;
+  sort_no: number;
+}

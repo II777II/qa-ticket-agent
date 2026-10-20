@@ -98,6 +98,12 @@ export default function Sidebar({
       </div>
 
       <div className="sidebar-foot">
+        <button type="button" className="nav-link" onClick={() => navigate("/orders")}>
+          ◈ 订单查询
+        </button>
+        <button type="button" className="nav-link" onClick={() => navigate("/kb")}>
+          ◈ 知识库检索
+        </button>
         <button type="button" className="nav-link" onClick={() => navigate("/admin")}>
           ◈ 运营概览
         </button>

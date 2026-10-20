@@ -23,7 +23,7 @@ from pydantic import Field, PrivateAttr
 CONTEXT_HEADER = "【参考资料】"
 CONTEXT_FOOTER = "【参考资料结束】"
 
-SUPPORTED_SUFFIXES = {".md", ".txt"}
+SUPPORTED_SUFFIXES = {".md", ".txt", ".html"}
 LATIN_WORD = re.compile(r"[a-zA-Z0-9_]{2,}")
 CJK = re.compile(r"[\u4e00-\u9fff]")
 
@@ -54,7 +54,11 @@ def _split_sections(path: Path) -> list[tuple[str, str]]:
 
     一级标题（# xxx）当作文档标题，标题与首个二级标题之间的「更新日期 / 维护」
     这类元信息直接丢掉——它们对检索没价值，留着只会挤掉正文占一个引用位。
+    HTML 知识页走 `_split_html_sections`。
     """
+    if path.suffix.lower() == ".html":
+        return _split_html_sections(path)
+
     text = path.read_text(encoding="utf-8").strip()
     sections: list[tuple[str, str]] = []
     doc_title = path.stem
@@ -87,6 +91,47 @@ def _split_sections(path: Path) -> list[tuple[str, str]]:
         blocks = [block.strip() for block in text.split("\n\n") if block.strip()]
         sections = [(doc_title, block) for block in blocks]
     return sections
+
+
+def _split_html_sections(path: Path) -> list[tuple[str, str]]:
+    """把知识库 HTML 页切成小节：按 <h2> 切块，去标签并解码实体。"""
+    import re
+    from html import unescape
+
+    raw = path.read_text(encoding="utf-8")
+    title_match = re.search(r"<title>(.*?)</title>", raw, flags=re.S | re.I)
+    doc_title = unescape(re.sub(r"\s+", " ", title_match.group(1)).strip()) if title_match else path.stem
+    doc_title = doc_title.split(" - ")[0].strip() or path.stem
+
+    body = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", raw)
+    parts = re.split(r"(?is)<h2[^>]*>(.*?)</h2>", body)
+    sections: list[tuple[str, str]] = []
+    if len(parts) == 1:
+        text = _html_to_text(body)
+        return [(doc_title, text)] if text else []
+
+    intro = _html_to_text(parts[0])
+    for index in range(1, len(parts), 2):
+        heading = unescape(re.sub(r"<[^>]+>", "", parts[index])).strip()
+        content = _html_to_text(parts[index + 1] if index + 1 < len(parts) else "")
+        if not content:
+            continue
+        if index == 1 and intro:
+            content = f"{intro}\n{content}"
+        sections.append((f"{doc_title} · {heading}" if heading else doc_title, content))
+    return sections
+
+
+def _html_to_text(fragment: str) -> str:
+    import re
+    from html import unescape
+
+    text = re.sub(r"(?is)<(br|/p|/div|/li|/dd|/dt|/h\d)[^>]*>", "\n", fragment)
+    text = re.sub(r"(?is)<li[^>]*>", "• ", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = unescape(text)
+    lines = [line.strip() for line in text.splitlines()]
+    return "\n".join(line for line in lines if line)
 
 
 class _Chunk:
@@ -125,6 +170,8 @@ class InMemoryRetriever(BaseRetriever):
             if not path.is_file() or path.suffix.lower() not in SUPPORTED_SUFFIXES:
                 continue
             if path.name.lower() == "readme.md":  # 目录说明不算知识
+                continue
+            if path.name.lower() == "index.html":  # 帮助中心目录页不算知识
                 continue
             for title, body in _split_sections(path):
                 self._chunks.append(_Chunk(path.name, title, body))

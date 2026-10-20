@@ -33,6 +33,8 @@ class AgentInfoResponse(HealthResponse):
     model: str = ""
     rag_top_k: int = 0
     tickets: int = 0
+    orders: int = 0
+    kb_articles: int = 0
     kb_documents: int = 0
     kb_chunks: int = 0
     git_sha: str = ""
