@@ -9,6 +9,7 @@ from backend.api.deps import get_runtime
 from backend.api.schemas import AgentInfoResponse, HealthResponse
 from backend.application.runtime import AgentRuntime
 from backend.infrastructure.config import settings
+from backend.infrastructure.version import git_version
 
 router = APIRouter(tags=["system"])
 
@@ -29,6 +30,7 @@ async def health(runtime: AgentRuntime = Depends(get_runtime)) -> HealthResponse
 @router.get("/api/agent-info", response_model=AgentInfoResponse, summary="当前 Agent 能力")
 async def agent_info(runtime: AgentRuntime = Depends(get_runtime)) -> AgentInfoResponse:
     info = runtime.describe()
+    version = git_version()
     return AgentInfoResponse(
         status="ok",
         provider=info["provider"],
@@ -41,6 +43,8 @@ async def agent_info(runtime: AgentRuntime = Depends(get_runtime)) -> AgentInfoR
         tickets=info["tickets"],
         kb_documents=info["kb_documents"],
         kb_chunks=info["kb_chunks"],
+        git_sha=version["sha"],
+        git_date=version["date"],
         extensions=[
             *[f"tool:{name}" for name in info["tools"]],
             "compose:docker/docker-compose.yml",

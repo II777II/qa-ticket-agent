@@ -19,6 +19,7 @@ from backend.application.tickets import TicketService
 from backend.infrastructure.config import settings
 from backend.infrastructure.llm import create_llm
 from backend.infrastructure.memory import create_checkpointer
+from backend.infrastructure.observability import MetricsCollector
 from backend.infrastructure.persistence import create_ticket_store
 from backend.infrastructure.retrieval import create_retriever
 
@@ -32,6 +33,7 @@ class AgentRuntime:
     graph: Any
     llm: Any
     tickets: TicketService
+    metrics: MetricsCollector
     tools: list[Any] = field(default_factory=list)
     retriever: Any | None = None
     checkpointer: Any | None = None
@@ -61,6 +63,7 @@ def create_runtime() -> AgentRuntime:
     checkpointer = create_checkpointer()
     store = create_ticket_store()
     tickets = TicketService(store)
+    metrics = MetricsCollector()
     tools = create_tools(tickets)
     retriever = create_retriever()
 
@@ -86,6 +89,7 @@ def create_runtime() -> AgentRuntime:
         graph=graph,
         llm=llm,
         tickets=tickets,
+        metrics=metrics,
         tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,

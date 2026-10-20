@@ -4,7 +4,7 @@
  * 一个会话 = 一个 thread_id，后端按它隔离短期记忆，所以刷新页面就是「新会话」。
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { streamChat } from "../api/agent";
 import type { ChatMessage, Ticket, ToolCallView, ToolEvent } from "../types";
@@ -45,16 +45,19 @@ export interface UseChatResult {
   send: (text: string, onTicket?: (tickets: Ticket[]) => void) => Promise<void>;
   stop: () => void;
   reset: () => void;
+  /** 从历史会话恢复消息（thread_id 一并恢复，后端短期记忆仍按它隔离） */
+  hydrate: (messages: ChatMessage[], threadId: string) => void;
+}
+
+function newThreadId(): string {
+  return `web-${Date.now().toString(36)}-${Math.round(Math.random() * 1e6).toString(36)}`;
 }
 
 export function useChat(): UseChatResult {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [busy, setBusy] = useState(false);
-  const [round, setRound] = useState(0);
+  const [threadId, setThreadId] = useState(newThreadId);
   const controllerRef = useRef<AbortController | null>(null);
-
-  // 同一轮对话用同一个 thread_id；点「新会话」才换一个
-  const threadId = useMemo(() => `web-${Date.now().toString(36)}-${round}`, [round]);
 
   const send = useCallback(
     async (text: string, onTicket?: (tickets: Ticket[]) => void) => {
@@ -119,8 +122,15 @@ export function useChat(): UseChatResult {
     controllerRef.current?.abort();
     setMessages([]);
     setBusy(false);
-    setRound((value) => value + 1); // 换 thread_id，后端那边就是一段全新的记忆
+    setThreadId(newThreadId());
   }, []);
 
-  return { messages, busy, threadId, send, stop, reset };
+  const hydrate = useCallback((history: ChatMessage[], nextThreadId: string) => {
+    controllerRef.current?.abort();
+    setMessages(history);
+    setBusy(false);
+    setThreadId(nextThreadId);
+  }, []);
+
+  return { messages, busy, threadId, send, stop, reset, hydrate };
 }

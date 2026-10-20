@@ -183,6 +183,13 @@ class InMemoryRetriever(BaseRetriever):
         *,
         run_manager: CallbackManagerForRetrieverRun | None = None,
     ) -> list[Document]:
+        return self._rank(query, self.top_k)
+
+    def search(self, query: str, top_k: int | None = None) -> list[Document]:
+        """供「知识库查询」面板直接使用：可以临时覆盖 top_k。"""
+        return self._rank(query, top_k or self.top_k)
+
+    def _rank(self, query: str, limit: int) -> list[Document]:
         query_tokens = _tokens(query)
         scored = []
         for chunk in self._chunks:
@@ -192,7 +199,7 @@ class InMemoryRetriever(BaseRetriever):
         scored.sort(key=lambda item: item[0], reverse=True)
 
         documents: list[Document] = []
-        for rank, (score, coverage, chunk) in enumerate(scored[: self.top_k], start=1):
+        for rank, (score, coverage, chunk) in enumerate(scored[: max(limit, 0)], start=1):
             documents.append(
                 Document(
                     page_content=chunk.text,

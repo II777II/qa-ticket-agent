@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
 from langchain_core.messages import AIMessageChunk, HumanMessage, ToolMessage
@@ -26,6 +27,7 @@ from backend.application.chat.events import (
     EVENT_TOOL,
 )
 from backend.infrastructure.config import settings
+from backend.infrastructure.observability import estimate_tokens
 
 if TYPE_CHECKING:  # 只用于类型标注，运行时不导入，避免与 runtime 形成循环
     from backend.application.runtime import AgentRuntime
@@ -127,6 +129,11 @@ class ChatService:
 
         announced: set[str] = set()
         citations_announced: set[str] = set()
+        started = time.perf_counter()
+        first_token_at: float | None = None
+        answer_parts: list[str] = []
+        usage_tokens = 0
+        ok = True
         try:
             async for mode, payload in self._runtime.graph.astream(
                 {"messages": [HumanMessage(content=message)]},
@@ -144,8 +151,14 @@ class ChatService:
                             continue
                         announced.add(key)
                         yield EVENT_TOOL, {"phase": "call", "name": call.get("name")}
+                    usage = getattr(chunk, "usage_metadata", None)
+                    if isinstance(usage, dict):
+                        usage_tokens = max(usage_tokens, int(usage.get("total_tokens") or 0))
                     text = _text_of(chunk)
                     if text:
+                        if first_token_at is None:
+                            first_token_at = time.perf_counter()
+                        answer_parts.append(text)
                         yield EVENT_TOKEN, {"text": text}
                 elif mode == "updates":
                     for event, data in _tool_events(payload):
@@ -155,5 +168,18 @@ class ChatService:
 
             yield EVENT_DONE, {"thread_id": thread_id}
         except Exception as exc:  # 单轮失败不该拖垮服务，转成 error 事件交给前端
+            ok = False
             logger.exception("对话失败")
             yield EVENT_ERROR, {"type": exc.__class__.__name__, "message": str(exc)}
+        finally:
+            # 每轮一条运营指标：首字延迟、总耗时、token、成功与否
+            total_ms = int((time.perf_counter() - started) * 1000)
+            first_ms = int((first_token_at - started) * 1000) if first_token_at else None
+            tokens = usage_tokens or estimate_tokens(message + "".join(answer_parts))
+            self._runtime.metrics.record_turn(
+                model=settings.llm_model or settings.llm_provider,
+                tokens=tokens,
+                first_token_ms=first_ms,
+                total_ms=total_ms,
+                ok=ok,
+            )

@@ -76,9 +76,26 @@ python -m uvicorn backend.api.app:app --port 5179
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
 | GET | `/api/tickets` | 工单列表，支持 `status` / `contact` / `limit` 过滤（阶段三看板用） |
 | GET | `/api/tickets/{id}` | 工单详情，含时间线 |
+| GET | `/api/kb/search?q=&top_k=` | 知识库检索命中（来源、小节、片段、相关度），供右侧知识面板 |
+| GET | `/api/metrics/summary?days=7` | 运营指标：Token、首字延迟、请求量、错误率、按天趋势、模型明细 |
 
 工单落在 `backend/data/tickets.json`（可用 `DATA_DIR` 指向别处）：建单用「临时文件 + 原子替换」
 写盘，同一联系人 + 同标题 + 未关闭的重复建单会被拦下、返回已有工单。
+
+## 界面（5 个页面）
+
+浅色 Codex 风格，hash 路由（静态托管零配置）：
+
+| 地址 | 页面 | 内容 |
+| --- | --- | --- |
+| `#/` | 首页 | 只有对话框：居中输入框 + 快捷问题 + 底部版本号 |
+| `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，工具链/引用/工单标签渲染在气泡底部 |
+| `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出本次问题的 Top-K 检索命中（来源、小节、相关度、片段） |
+| `#/chat?panel=tickets` | 对话 + 工单 | 右侧工单查询（单号/标题/联系人 + 状态过滤）+ 详情抽屉（时间线） |
+| `#/admin` | 后台管理 | Token 消耗、平均首字延迟、请求总量、错误率、7 天趋势、模型调用明细 |
+
+会话历史存在浏览器 localStorage（POC 不做服务端会话列表）；后台指标为进程内统计，重启清零。
+页脚/侧栏显示当前 git 短 hash，方便对照改前/改后版本。
 
 ## 测试
 
@@ -152,12 +169,14 @@ backend/
   data/kb/             知识库文档
 frontend/
   vite.config.ts       代理到后端 + 固定 127.0.0.1（避开 localhost→::1 连不上的坑）
-  src/main.tsx         React 挂载 + antd 中文 locale + Ant Design X Provider
-  src/App.tsx          布局：顶部状态条 + 左侧对话 + 右侧工单面板
-  src/ChatPage.tsx     对话页：Bubble.List / Sender / ThoughtChain / Welcome / Prompts
-  src/TicketPanel.tsx  工单面板：列表 + 详情抽屉（含处理时间线）
-  src/hooks/useChat.ts 会话状态：消息列表、流式增量、工具事件合并
-  src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单查询
+  src/main.tsx         React 挂载 + 浅色主题 token + antd 中文 locale + XProvider
+  src/router.ts        hash 路由（#/、#/chat、#/admin）
+  src/App.tsx          路由分发 + 后端信息 + 离线提示
+  src/pages/           HomePage（第 1 屏）/ ChatPage（第 2~4 屏）/ AdminPage（第 5 屏）
+  src/components/      Sidebar / Composer / MessageList / KnowledgePanel / TicketPanel
+                       / KpiCard / TrendChart / VersionBadge
+  src/hooks/           useChat（流式与会话恢复）、useConversations（localStorage 历史）
+  src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单/知识库/指标查询
   src/types.ts         与后端 schemas.py 对应的类型
 docs/
   architecture.md      架构图、执行路径、SSE 事件表、扩展点与生产替换

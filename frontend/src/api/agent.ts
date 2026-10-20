@@ -5,7 +5,7 @@
  * 只改这个文件，页面组件不用动。
  */
 
-import type { AgentInfo, StreamHandlers, Ticket } from "../types";
+import type { AgentInfo, KnowledgeHit, MetricsSummary, StreamHandlers, Ticket } from "../types";
 
 /** 默认空字符串 = 同源（走 Vite 代理）。需要直连后端时设 VITE_API_BASE=http://127.0.0.1:5179 */
 const API_BASE: string = import.meta.env.VITE_API_BASE ?? "";
@@ -38,6 +38,15 @@ export function listTickets(): Promise<Ticket[]> {
 
 export function getTicket(ticketId: string): Promise<Ticket> {
   return requestJson<Ticket>(`/api/tickets/${encodeURIComponent(ticketId)}`);
+}
+
+export function searchKnowledge(query: string, topK = 5): Promise<KnowledgeHit[]> {
+  const params = new URLSearchParams({ q: query, top_k: String(topK) });
+  return requestJson<KnowledgeHit[]>(`/api/kb/search?${params.toString()}`);
+}
+
+export function getMetrics(days = 7): Promise<MetricsSummary> {
+  return requestJson<MetricsSummary>(`/api/metrics/summary?days=${days}`);
 }
 
 /** 把一段 SSE 报文拆成事件名与 JSON 载荷 */

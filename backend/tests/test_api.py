@@ -57,6 +57,7 @@ def test_agent_info_reports_capabilities(isolated_runtime: AgentRuntime) -> None
     assert body["kb_chunks"] >= 10
     assert "tool:create_ticket" in body["extensions"]
     assert body["tickets"] == 0
+    assert body["git_sha"]  # 界面要显示版本号
 
 
 def test_root_returns_html_or_json(isolated_runtime: AgentRuntime) -> None:
@@ -88,6 +89,29 @@ def test_tickets_flow(isolated_runtime: AgentRuntime) -> None:
 def test_unknown_ticket_returns_404(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
     assert asyncio.run(_get("/api/tickets/TK-19700101-0001")).status_code == 404
+
+
+def test_kb_search_returns_hits(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    body = asyncio.run(_get("/api/kb/search?q=VPN%20691&top_k=2")).json()
+    assert body
+    assert body[0]["source"] == "vpn-691.md"
+    assert body[0]["score"] is not None
+    assert len(body) <= 2
+
+
+def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    asyncio.run(_stream_chat("VPN 连不上怎么办？", "api-metrics"))
+
+    summary = asyncio.run(_get("/api/metrics/summary?days=1")).json()
+    kpis = summary["kpis"]
+    assert kpis["requests"] == 1
+    assert kpis["tokens"] > 0
+    assert kpis["avg_latency_ms"] > 0
+    assert kpis["avg_first_token_ms"] >= 0
+    assert len(summary["by_day"]) == 1
+    assert summary["by_model"][0]["calls"] == 1
 
 
 def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:

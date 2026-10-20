@@ -58,6 +58,7 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     from backend.application.tickets import TicketService
     from backend.infrastructure.config import settings
     from backend.infrastructure.llm.mock import FakeChatModel
+    from backend.infrastructure.observability import MetricsCollector
 
     llm = FakeChatModel()
     store = JsonTicketStore(store_path)
@@ -70,6 +71,7 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
         graph=graph,
         llm=llm,
         tickets=tickets,
+        metrics=MetricsCollector(),
         tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,

@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.api.routes import chat as chat_routes
+from backend.api.routes import knowledge as knowledge_routes
+from backend.api.routes import metrics as metrics_routes
 from backend.api.routes import system as system_routes
 from backend.api.routes import tickets as ticket_routes
 from backend.application.runtime import create_runtime
@@ -52,6 +54,8 @@ def create_app() -> FastAPI:
     app.include_router(system_routes.router)
     app.include_router(chat_routes.router)
     app.include_router(ticket_routes.router)
+    app.include_router(knowledge_routes.router)
+    app.include_router(metrics_routes.router)
 
     # 前端构建产物存在时挂上静态资源（首页由 system 路由返回 index.html）；API 路由不受影响
     assets_dir = settings.frontend_dist / "assets"

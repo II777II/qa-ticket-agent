@@ -91,12 +91,17 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `app.py` 组装、`routes/`（system / chat / tickets）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
+| 接口层（新增） | `backend/api/routes/knowledge.py`、`metrics.py` | 知识库检索与运营指标查询，服务前端右侧面板与后台页 | 不改 |
 | 应用层 | `backend/application/` | `runtime.py` 装配；`agent/`（graph / tools / prompts）；`chat/service.py`（一轮对话用例）；`tickets/service.py`（工单用例） | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 枚举与状态流转/去重规则、`errors.py` 领域异常 | 不改 |
-| 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/` 的实现与工厂 | 只加一个分支 |
+| 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/`、`observability/`（指标）、`version.py`（git 版本） | 只加一个分支 |
 
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
 领域层不 import FastAPI / LangChain；接口层不写业务规则。
+
+前端五个页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
+`?panel=tickets`（工单查询）、`#/admin`（运营指标）。前端结构：`pages/`（页面）→
+`components/`（可复用块）→ `hooks/`（状态）→ `api/`（网络），会话历史存 localStorage。
 
 ## 一轮对话的执行路径
 

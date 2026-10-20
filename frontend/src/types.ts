@@ -61,6 +61,8 @@ export interface AgentInfo {
   ticket_store: string | null;
   rag_top_k: number;
   extensions: string[];
+  git_sha: string;
+  git_date: string;
 }
 
 /** 一条工具调用在界面上的展示状态 */
@@ -92,3 +94,57 @@ export interface StreamHandlers {
   onDone?: () => void;
   onError?: (event: ErrorEvent) => void;
 }
+
+/** 知识库检索面板的一条命中 */
+export interface KnowledgeHit {
+  index: number;
+  source: string;
+  title: string;
+  snippet: string;
+  score?: number | null;
+  coverage?: number | null;
+}
+
+export interface MetricsKpi {
+  requests: number;
+  tokens: number;
+  avg_first_token_ms: number;
+  p95_first_token_ms: number;
+  avg_latency_ms: number;
+  error_rate: number;
+}
+
+export interface DayMetric {
+  date: string;
+  requests: number;
+  tokens: number;
+  avg_latency_ms: number;
+}
+
+export interface ModelMetric {
+  model: string;
+  calls: number;
+  tokens: number;
+  avg_latency_ms: number;
+  success_rate: number;
+}
+
+export interface MetricsSummary {
+  days: number;
+  generated_at: string;
+  kpis: MetricsKpi;
+  by_day: DayMetric[];
+  by_model: ModelMetric[];
+}
+
+/** 本地保存的一次会话（localStorage） */
+export interface Conversation {
+  id: string;
+  threadId: string;
+  title: string;
+  updatedAt: number;
+  messages: ChatMessage[];
+}
+
+export type RoutePage = "home" | "chat" | "admin";
+export type ChatPanel = "none" | "knowledge" | "tickets";

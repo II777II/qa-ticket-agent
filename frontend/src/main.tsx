@@ -15,7 +15,28 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        token: {
+          colorPrimary: "#0d8f6f",
+          colorInfo: "#3f63f5",
+          colorBgLayout: "#f6f6f7",
+          colorBgContainer: "#ffffff",
+          colorText: "#1c1c1f",
+          colorTextSecondary: "#6a6a73",
+          colorBorder: "#e6e6ea",
+          borderRadius: 10,
+          fontSize: 13,
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',
+        },
+        components: {
+          Button: { primaryShadow: "none", defaultShadow: "none" },
+          Table: { headerBg: "#fafafa" },
+        },
+      }}
+    >
       <XProvider>
         <App />
       </XProvider>
