@@ -18,7 +18,7 @@ export default function KnowledgePanel({ question, hits, loading, onRefresh }: K
     <aside className="side-panel">
       <div className="panel-head">
         <span className="panel-title">知识库检索结果</span>
-        <Tag bordered={false}>本轮 {hits.length} 条</Tag>
+        <Tag variant="filled">本轮 {hits.length} 条</Tag>
         <Button size="small" type="text" icon={<ReloadOutlined />} onClick={onRefresh} loading={loading}>
           重查
         </Button>
@@ -48,7 +48,7 @@ export default function KnowledgePanel({ question, hits, loading, onRefresh }: K
         </div>
       )}
 
-      <Space direction="vertical" size={2} className="panel-foot">
+      <Space orientation="vertical" size={2} className="panel-foot">
         <Text type="secondary" style={{ fontSize: 11 }}>
           检索为关键词 IDF 打分（覆盖率阈值 0.25），top-k 由后端 RAG_TOP_K 控制上限。
         </Text>

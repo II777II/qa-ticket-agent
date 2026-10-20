@@ -115,7 +115,7 @@ export default function KnowledgePage({ info }: { info: AgentInfo | null }) {
                 <a className="article-card" key={article.article_no} href={article.url} target="_blank" rel="noreferrer">
                   <div className="article-head">
                     <span className="mono muted">{article.article_no}</span>
-                    <Tag bordered={false}>{article.category_name}</Tag>
+                    <Tag variant="filled">{article.category_name}</Tag>
                     <span className="spacer" />
                     <span className="muted">查看 HTML 页面 ↗</span>
                   </div>

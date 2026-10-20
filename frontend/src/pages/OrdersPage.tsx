@@ -131,7 +131,7 @@ export default function OrdersPage({ info }: { info: AgentInfo | null }) {
                   <span className="panel-title">{selected.order_no}</span>
                   <span className={`tag tag-status-${selected.status_label}`}>{selected.status_label}</span>
                   <span className="spacer" />
-                  <Tag bordered={false}>{selected.pay_status_label}</Tag>
+                  <Tag variant="filled">{selected.pay_status_label}</Tag>
                 </div>
                 <div className="detail-scroll">
                   <div className="detail-block">
