@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（95 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、检索、存储、工具、接口与整链；
+- **自动化用例**（96 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 95 passed in ~10s
+python -m pytest              # 96 passed in ~10s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```

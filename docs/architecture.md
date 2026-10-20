@@ -108,6 +108,22 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
 领域层不 import FastAPI / LangChain；接口层不写业务规则。
 
+对话接口在装配上采用两级 Router：
+
+```text
+main app
+└── chat router
+    ├── POST /chat
+    └── branch router
+        ├── POST /branch/knowledge
+        ├── POST /branch/query
+        ├── POST /branch/service
+        └── POST /branch/fallback
+```
+
+`app.py` 只挂载 chat router；branch router 由 chat router 内部挂载。FastAPI 对外仍将
+五条路径扁平化为独立接口，因此 URL 和行为不变。
+
 前端页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
 `?panel=orders`（本轮订单）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→
 `components/`（可复用块）→ `hooks/`（状态）→ `api/`（网络），会话历史存 localStorage。

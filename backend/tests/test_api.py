@@ -9,6 +9,8 @@ import httpx
 import pytest
 
 from backend.api.app import app as api_app
+from backend.api.routes import agent as agent_routes
+from backend.api.routes import chat as chat_routes
 from backend.application.runtime import AgentRuntime
 
 
@@ -96,6 +98,16 @@ def test_openapi_mounts_chat_and_four_branch_routes() -> None:
     assert paths["/branch/service"]["post"]
     assert paths["/branch/fallback"]["post"]
     assert "/api/tickets" not in paths
+
+
+def test_chat_router_owns_four_branch_routes() -> None:
+    """路由装配层级必须是 app → chat → four branches。"""
+    included = [
+        route
+        for route in chat_routes.router.routes
+        if getattr(route, "original_router", None) is agent_routes.router
+    ]
+    assert len(included) == 1
 
 
 def test_kb_search_returns_hits(isolated_runtime: AgentRuntime) -> None:

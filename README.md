@@ -132,7 +132,7 @@ python -m uvicorn backend.api.app:app --port 5179
 ## 测试
 
 ```powershell
-python -m pytest            # 95 个用例，约 10 秒
+python -m pytest            # 96 个用例，约 10 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -206,6 +206,7 @@ backend/
   api/                 接口层
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
     deps.py            依赖取用点（从 app.state 取运行时与用例）
+    streaming.py       SSE 响应封装（/chat 与 /branch/* 共用）
     routes/            chat.py / agent.py / orders.py / knowledge.py / metrics.py / system.py
                        tickets.py（能力保留，当前未挂载）
     schemas.py         请求响应模型与 SSE 编码
@@ -231,6 +232,19 @@ docs/
   deployment.md        三种跑法、compose 升级步骤、日志与排查
   test-cases.md        50 个自动化用例 + 11 个前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
+```
+
+对话路由的装配层级：
+
+```text
+app
+└── chat router
+    ├── POST /chat
+    └── branch router
+        ├── POST /branch/knowledge
+        ├── POST /branch/query
+        ├── POST /branch/service
+        └── POST /branch/fallback
 ```
 
 ## 排期

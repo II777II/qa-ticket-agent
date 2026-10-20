@@ -14,7 +14,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.api.routes import agent as agent_routes
 from backend.api.routes import chat as chat_routes
 from backend.api.routes import knowledge as knowledge_routes
 from backend.api.routes import metrics as metrics_routes
@@ -54,7 +53,6 @@ def create_app() -> FastAPI:
 
     app.include_router(system_routes.router)
     app.include_router(chat_routes.router)
-    app.include_router(agent_routes.router)
     app.include_router(order_routes.router)
     app.include_router(knowledge_routes.router)
     app.include_router(metrics_routes.router)

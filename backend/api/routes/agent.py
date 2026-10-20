@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 
 from backend.api.deps import get_chat
-from backend.api.routes.chat import stream_response
 from backend.api.schemas import ChatRequest
+from backend.api.streaming import stream_response
 from backend.application.chat import ChatService
 
 router = APIRouter(prefix="/branch", tags=["agent-routes"])
