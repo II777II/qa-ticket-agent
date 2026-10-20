@@ -183,3 +183,15 @@ def test_kb_article_catalog(isolated_runtime: AgentRuntime) -> None:
     detail = asyncio.run(_get(f"/api/kb/articles/{articles[0]['article_no']}"))
     assert detail.status_code == 200
     assert detail.json()["url"].startswith("/kb/pages/")
+
+
+def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    events = asyncio.run(_stream_chat("帮我查询张三的订单", "api-order"))
+    names = [name for name, _ in events]
+    tools = [(payload["phase"], payload["name"]) for name, payload in events if name == "tool"]
+    assert ("call", "query_order") in tools
+    assert "citation" not in names
+    assert "ticket" not in names
+    text = "".join(payload["text"] for name, payload in events if name == "token")
+    assert "SO" in text

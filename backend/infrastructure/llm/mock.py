@@ -33,6 +33,7 @@ from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResu
 from pydantic import Field
 
 from backend.infrastructure.retrieval.in_memory import CONTEXT_FOOTER, CONTEXT_HEADER
+from backend.domain.intent import ORDER_NO_RE, detect_intent
 
 TEMPLATE = """【演示模式】当前没有可用的模型 API Key，这是一段占位回答，用来验证链路是否通畅。
 
@@ -129,6 +130,20 @@ def _clean_title(text: str) -> str:
     title = re.sub(r"[，,。；;、！!？?：:\s]+", " ", title).strip()
     title = re.sub(r"^(一个|一张|个|张|一)\s*", "", title)
     return (title or text)[:40]
+
+
+def _order_keyword(text: str) -> str:
+    """从「帮我查询张三的订单」里抽出查询词「张三」。"""
+    import re
+
+    cleaned = text
+    for hint in (
+        "帮我查询", "帮我查一下", "帮忙查询", "帮我查", "查询一下", "查询", "查一下", "查下", "查",
+        "我的订单", "订单进度", "订单状态", "订单到哪了", "订单", "一下", "请问",
+    ):
+        cleaned = cleaned.replace(hint, "")
+    cleaned = re.sub(r"[，,。；;、！!？?：:\s的]+", " ", cleaned).strip()
+    return (cleaned or text)[:30]
 
 
 def _guess_priority(text: str) -> str:
@@ -267,6 +282,15 @@ class FakeChatModel(BaseChatModel):
             # 本轮没给联系人，就翻历史（这正是多轮记忆的用处之一）
             contact = self._history_contact(messages)
 
+        if "query_order" in available and detect_intent(question) == "order_lookup":
+            order_no = ORDER_NO_RE.search(question)
+            args = (
+                {"order_no": order_no.group(0).upper()}
+                if order_no
+                else {"keyword": _order_keyword(question)}
+            )
+            return _tool_call("query_order", args)
+
         if "escalate_to_human" in available and _hit(question, ESCALATE_HINTS) and ticket_id:
             return _tool_call("escalate_to_human", {"ticket_id": ticket_id.group(0), "reason": question[:120]})
 
@@ -370,6 +394,19 @@ class FakeChatModel(BaseChatModel):
             if payload.get("action") == "escalate_to_human":
                 return f"【演示模式】售后工单 {ticket['id']} 已转人工，状态：{ticket['status']}。售后专员会尽快接手。"
             return f"【演示模式】工单 {ticket['id']} 当前状态：{ticket['status']}（{ticket['updated_at']} 更新）。"
+
+        orders = payload.get("orders")
+        if orders:
+            lines = [
+                f"- {order['order_no']} ｜ {order['status']} ｜ 应付 ¥{order['payable_amount']:.2f} ｜ "
+                + " / ".join(item["name"] for item in order["items"])
+                for order in orders
+            ]
+            return (
+                "【演示模式】查到这些订单：\n"
+                + "\n".join(lines)
+                + "\n\n如果这不是你要找的订单，请把订单号（SO 开头）发我。"
+            )
 
         tickets = payload.get("tickets")
         if tickets:

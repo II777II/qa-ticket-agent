@@ -7,15 +7,17 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from backend.application.agent import build_graph, create_tools
 from backend.application.agent.graph import AgentState, route_after_agent
+from backend.application.orders import OrderService
 from backend.application.tickets import TicketService
 from backend.infrastructure.llm.mock import FakeChatModel
 from backend.infrastructure.persistence.json_store import JsonTicketStore
+from backend.infrastructure.persistence.factory import create_order_store
 from backend.infrastructure.retrieval.in_memory import CONTEXT_HEADER, InMemoryRetriever
 
 
 def _build(store: JsonTicketStore, retriever=None):
     llm = FakeChatModel()
-    tools = create_tools(TicketService(store))
+    tools = create_tools(TicketService(store), OrderService(create_order_store()))
     graph = build_graph(llm=llm, tools=tools, retriever=retriever, checkpointer=InMemorySaver())
     return graph, tools
 

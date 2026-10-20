@@ -19,15 +19,37 @@ from typing import Any
 
 from langchain_core.tools import BaseTool, tool
 
+from backend.application.orders import OrderService
 from backend.application.tickets import TicketService
 from backend.domain import TicketCreate
+from backend.domain.orders import ORDER_STATUS_LABELS, OrderRecord
 
 
 def _dump(payload: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False)
 
 
-def create_tools(tickets: TicketService) -> list[BaseTool]:
+STATUS_BY_LABEL = {label: code for code, label in ORDER_STATUS_LABELS.items()}
+
+
+def _order_summary(order: OrderRecord) -> dict[str, Any]:
+    return {
+        "order_no": order.order_no,
+        "status": order.status_label,
+        "pay_status": order.pay_status_label,
+        "customer": (order.user or {}).get("name") or order.user_id,
+        "payable_amount": order.payable_amount,
+        "paid_amount": order.paid_amount,
+        "refund_amount": order.refund_amount,
+        "created_at": order.created_at,
+        "items": [
+            {"name": item.product_name, "spec": item.sku_spec, "quantity": item.quantity, "price": item.price}
+            for item in order.items
+        ],
+    }
+
+
+def create_tools(tickets: TicketService, orders: OrderService) -> list[BaseTool]:
     """按工单用例创建工具集（依赖注入，避免全局单例）。"""
 
     @tool("create_ticket", args_schema=TicketCreate)
@@ -116,4 +138,46 @@ def create_tools(tickets: TicketService) -> list[BaseTool]:
             )
         return _dump({"ok": True, "action": "escalate_to_human", "ticket": record.model_dump()})
 
-    return [create_ticket, query_ticket, escalate_to_human]
+    @tool("query_order")
+    def query_order(order_no: str = "", keyword: str = "", status: str = "") -> str:
+        """查询电商订单。
+
+        用户给订单号（形如 SO202610210001）时按单号查；只给姓名/手机号/商品关键词时按关键词查；
+        status 可传中文状态（待支付/已支付/待发货/已发货/已完成/已取消/退款中/已退款）。
+        """
+        status_code = None
+        if status:
+            status_code = STATUS_BY_LABEL.get(status.strip())
+            if status_code is None:
+                return _dump(
+                    {
+                        "ok": False,
+                        "action": "query_order",
+                        "message": f"未知订单状态 {status!r}，可选：{'、'.join(STATUS_BY_LABEL)}",
+                    }
+                )
+
+        if order_no:
+            order = orders.get(order_no)
+            results = [order] if order is not None else []
+        else:
+            results = orders.search(q=keyword, status=status_code, limit=5)
+
+        if not results:
+            return _dump(
+                {
+                    "ok": False,
+                    "action": "query_order",
+                    "message": "没有找到匹配的订单，请提供订单号（SO 开头）或收货人姓名/手机号",
+                }
+            )
+        return _dump(
+            {
+                "ok": True,
+                "action": "query_order",
+                "orders": [_order_summary(order) for order in results],
+                "message": f"查到 {len(results)} 笔订单",
+            }
+        )
+
+    return [create_ticket, query_ticket, escalate_to_human, query_order]

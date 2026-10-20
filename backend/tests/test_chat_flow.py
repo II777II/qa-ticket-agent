@@ -98,3 +98,12 @@ def test_unknown_question_falls_back_without_citation(isolated_runtime: AgentRun
     assert not result["errors"]
     assert result["citations"] == []
     assert result["text"]
+
+
+def test_order_query_uses_tool_without_rag(isolated_runtime: AgentRuntime) -> None:
+    """「查张三的订单」应调 query_order，不引用知识库、也不建售后工单。"""
+    result = _turn(isolated_runtime, "帮我查询张三的订单", "flow-order")
+    assert any(tool["name"] == "query_order" for tool in result["tools"])
+    assert result["citations"] == []
+    assert result["tickets"] == []
+    assert "SO" in result["text"]

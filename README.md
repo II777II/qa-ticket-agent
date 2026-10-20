@@ -15,7 +15,7 @@
 | 编排 | LangGraph StateGraph（只实现 Agent + Tool 两分支） | 已就绪 |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
-| 工具调用 | `create_ticket` / `query_ticket` / `escalate_to_human` | 已就绪 |
+| 工具调用 | `create_ticket` / `query_ticket` / `escalate_to_human` / `query_order` | 已就绪 |
 | 简易 RAG | 进程内检索 + 50 篇电商 HTML + 引用 | 已就绪（HTML 按 h2 切块） |
 | 订单查询 | JSON 演示数据（50 单，按 Postgres 表形状） | 已就绪（`#/orders`） |
 | 知识库 | 50 篇 HTML 文章 + 分类/标签目录 | 已就绪（`#/kb`） |
@@ -36,6 +36,9 @@ Copy-Item .env.example .env      # 什么都不填也能跑（演示模式）
 
 # 命令行验收：能流式输出回答即通过
 python -m backend.scripts.cli_chat --once "退款多久到账？"
+
+# 订单查询：按收货人姓名/订单号直接查，不建工单
+python -m backend.scripts.cli_chat --once "帮我查询张三的订单"
 
 # 走一遍「问答 → 建单 → 查进度 → 转人工」（演示模式下也能跑）
 python -m backend.scripts.cli_chat
@@ -115,7 +118,7 @@ python -m uvicorn backend.api.app:app --port 5179
 ## 测试
 
 ```powershell
-python -m pytest            # 81 个用例，约 10 秒
+python -m pytest            # 86 个用例，约 11 秒
 python -m pytest -v         # 看每个用例名
 ```
 

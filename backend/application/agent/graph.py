@@ -21,6 +21,7 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from backend.application.agent.prompts import SYSTEM_PROMPT
+from backend.domain.intent import detect_intent
 from backend.infrastructure.retrieval.in_memory import format_context
 
 
@@ -63,7 +64,8 @@ def _prepare_messages(
             (_text_of(message.content) for message in reversed(history) if isinstance(message, HumanMessage)),
             "",
         )
-        if question:
+        # 订单查询走工具拿实时数据，不做 RAG，避免把「订单」误当成知识问题
+        if question and detect_intent(question) != "order_lookup":
             documents = _retrieve(retriever, question)
             if documents:
                 citations = _to_citations(documents)

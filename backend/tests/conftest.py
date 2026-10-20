@@ -66,7 +66,8 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     llm = FakeChatModel()
     store = JsonTicketStore(store_path)
     tickets = TicketService(store)
-    tools = create_tools(tickets)
+    orders_service = OrderService(create_order_store())
+    tools = create_tools(tickets, orders_service)
     retriever = InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
     checkpointer = InMemorySaver()
     graph = build_graph(llm=llm, tools=tools, retriever=retriever, checkpointer=checkpointer)
@@ -75,7 +76,7 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
         llm=llm,
         tickets=tickets,
         metrics=MetricsCollector(),
-        orders=OrderService(create_order_store()),
+        orders=orders_service,
         knowledge=KnowledgeService(create_knowledge_catalog()),
         tools=tools,
         retriever=retriever,

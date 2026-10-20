@@ -10,13 +10,15 @@ from pydantic import ValidationError
 from langchain_core.tools import BaseTool
 
 from backend.application.agent.tools import create_tools as _create_tools
+from backend.application.orders import OrderService
 from backend.application.tickets import TicketService
+from backend.infrastructure.persistence.factory import create_order_store
 from backend.infrastructure.persistence.json_store import JsonTicketStore
 
 
 def create_tools(store: JsonTicketStore) -> list[BaseTool]:
     """测试适配：工具现在依赖工单用例，这里包一层，保持用例里的旧调用签名。"""
-    return _create_tools(TicketService(store))
+    return _create_tools(TicketService(store), OrderService(create_order_store()))
 
 
 def _by_name(tools, name):
@@ -25,7 +27,12 @@ def _by_name(tools, name):
 
 def test_registers_expected_tools(store: JsonTicketStore) -> None:
     tools = create_tools(store)
-    assert [tool.name for tool in tools] == ["create_ticket", "query_ticket", "escalate_to_human"]
+    assert [tool.name for tool in tools] == [
+        "create_ticket",
+        "query_ticket",
+        "escalate_to_human",
+        "query_order",
+    ]
     # 工具描述会进模型上下文，必须写清楚使用条件
     for tool in tools:
         assert tool.description.strip()
@@ -159,3 +166,24 @@ def test_escalate_unknown_ticket(store: JsonTicketStore) -> None:
     )
     assert payload["ok"] is False
     assert "先建单" in payload["message"]
+
+
+def test_query_order_by_order_no(store: JsonTicketStore) -> None:
+    sample = OrderService(create_order_store()).search(limit=1)[0]
+    payload = json.loads(_by_name(create_tools(store), "query_order").invoke({"order_no": sample.order_no}))
+    assert payload["ok"] is True
+    assert payload["orders"][0]["order_no"] == sample.order_no
+    assert payload["orders"][0]["status"]
+
+
+def test_query_order_by_customer_name(store: JsonTicketStore) -> None:
+    payload = json.loads(_by_name(create_tools(store), "query_order").invoke({"keyword": "张三"}))
+    assert payload["ok"] is True
+    assert payload["orders"]
+    assert all(order["customer"] == "张三" for order in payload["orders"])
+
+
+def test_query_order_not_found(store: JsonTicketStore) -> None:
+    payload = json.loads(_by_name(create_tools(store), "query_order").invoke({"keyword": "不存在的人"}))
+    assert payload["ok"] is False
+    assert "订单号" in payload["message"]

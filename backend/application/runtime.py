@@ -73,7 +73,7 @@ def create_runtime() -> AgentRuntime:
     metrics = MetricsCollector()
     orders = OrderService(create_order_store())
     knowledge = KnowledgeService(create_knowledge_catalog())
-    tools = create_tools(tickets)
+    tools = create_tools(tickets, orders)
     retriever = create_retriever()
 
     graph = build_graph(
