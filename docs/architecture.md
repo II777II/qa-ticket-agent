@@ -99,7 +99,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | 五层说法 | 目录 | 职责 | 换实现的代价 |
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
-| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（system / chat / agent）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
+| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（dialogue / system / chat / agent）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
 | 接口层（数据接口） | `backend/api/routes/knowledge.py`、`orders.py`、`metrics.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
 | 应用层 | `backend/application/` | `runtime.py` 装配；`agent/`（graph / tools / prompts）；`chat/service.py`（一轮对话）；`tickets/service.py`（售后工单）；`orders/service.py`（订单查询）；`knowledge/service.py`（知识库目录） | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 枚举与状态流转/去重规则、`errors.py` 领域异常 | 不改 |
@@ -108,12 +108,13 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
 领域层不 import FastAPI / LangChain；接口层不写业务规则。
 
-对话接口在装配上采用两级 Router：
+对话接口在装配上采用中立聚合 Router：
 
 ```text
 main app
-└── chat router
-    ├── POST /chat
+└── dialogue aggregator
+    ├── chat router
+    │   └── POST /chat
     └── branch router
         ├── POST /branch/knowledge
         ├── POST /branch/query
@@ -121,8 +122,9 @@ main app
         └── POST /branch/fallback
 ```
 
-`app.py` 只挂载 chat router；branch router 由 chat router 内部挂载。FastAPI 对外仍将
-五条路径扁平化为独立接口，因此 URL 和行为不变。
+`app.py` 只挂载 dialogue 聚合 router；chat 与 branch 在聚合层平级挂载，避免让
+`/chat` 反向依赖 `/branch`。FastAPI 对外仍将五条路径扁平化为独立接口，因此 URL
+和行为不变。
 
 前端页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
 `?panel=orders`（本轮订单）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→

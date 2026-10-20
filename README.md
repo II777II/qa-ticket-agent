@@ -207,7 +207,8 @@ backend/
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
     deps.py            依赖取用点（从 app.state 取运行时与用例）
     streaming.py       SSE 响应封装（/chat 与 /branch/* 共用）
-    routes/            chat.py / agent.py / orders.py / knowledge.py / metrics.py / system.py
+    routes/            dialogue.py / chat.py / agent.py / orders.py / knowledge.py
+                       metrics.py / system.py
                        tickets.py（能力保留，当前未挂载）
     schemas.py         请求响应模型与 SSE 编码
   scripts/cli_chat.py  命令行验收
@@ -238,8 +239,9 @@ docker/                compose 升级落点（POC 不启用）
 
 ```text
 app
-└── chat router
-    ├── POST /chat
+└── dialogue aggregator
+    ├── chat router
+    │   └── POST /chat
     └── branch router
         ├── POST /branch/knowledge
         ├── POST /branch/query
