@@ -41,7 +41,18 @@ TEMPLATE = """【演示模式】当前没有可用的模型 API Key，这是一�
 链路检查：前端 -> FastAPI /chat (SSE) -> LangGraph agent 节点 -> 模型。
 把 .env 里的 LLM_PROVIDER 改成 deepseek 或 openai 并填好 Key，这里就会替换成真实模型的流式输出。"""
 
-CREATE_HINTS = ("建单", "建个工单", "创建工单", "提交工单", "报修", "提个工单", "开个单", "帮我建", "帮我提")
+CREATE_HINTS = (
+    "售后工单",
+    "建单",
+    "建个工单",
+    "创建工单",
+    "提交工单",
+    "报修",
+    "提个工单",
+    "开个单",
+    "帮我建",
+    "帮我提",
+)
 QUERY_HINTS = ("工单进度", "查询工单", "查工单", "我的工单", "工单状态", "处理到哪", "催单", "催一下", "进度怎么样")
 ESCALATE_HINTS = ("转人工", "人工客服", "找人工", "转工程师", "叫工程师")
 
@@ -89,11 +100,13 @@ def _called_this_turn(messages: Sequence[BaseMessage], name: str | None = None) 
 def _guess_category(text: str) -> str:
     """按命中关键词的个数打分取最高，比「先匹配到谁算谁」稳一点。"""
     rules = (
-        ("账号与权限", ("密码", "账号", "权限", "锁定", "登录不上", "登不上", "重置")),
-        ("网络与VPN", ("vpn", "VPN", "网络", "断网", "连不上", "上不了网", "wifi", "WiFi", "代理", "内网")),
-        ("办公设备", ("打印机", "打印不了", "显示屏", "显示器", "键盘", "鼠标", "电脑", "蓝屏", "开机")),
-        ("邮件与协作", ("邮箱", "邮件", "outlook", "Outlook", "企业微信", "teams", "Teams", "会议")),
-        ("业务系统", ("erp", "ERP", "crm", "CRM", "oa", "OA", "门户", "业务系统")),
+        # 「售后」太泛（用户常直接说「建个售后工单」），不作为分类关键词
+        ("退换与售后", ("退货", "换货", "维修", "保修", "价保")),
+        ("配送与物流", ("物流", "发货", "快递", "签收", "配送", "收货地址", "到货", "包裹")),
+        ("发票与报销", ("发票", "开票", "报销", "税号", "专票")),
+        ("账户与安全", ("账号", "密码", "登录", "安全", "绑定", "注销")),
+        ("订单与支付", ("订单", "支付", "付款", "退款", "下单", "优惠券", "运费", "取消")),
+        ("商品与质量", ("商品", "质量", "损坏", "规格", "型号", "驱动", "安装", "配件", "打印机")),
     )
     best_category, best_score = "其他", 0
     for category, keywords in rules:
@@ -104,7 +117,7 @@ def _guess_category(text: str) -> str:
 
 
 def _clean_title(text: str) -> str:
-    """把「帮我建个工单，整个部门都连不上，联系我 a@b.com」压成一句问题描述。"""
+    """把「帮我建个售后工单，商品有质量问题，联系我 a@b.com」压成一句问题描述。"""
     title = text
     for hint in CREATE_HINTS:
         title = title.replace(hint, "")
@@ -114,6 +127,7 @@ def _clean_title(text: str) -> str:
     title = re.sub(r"(联系我|联系人|我的邮箱是|邮箱是|工号是|电话是|工号|邮箱|电话)", " ", title)
     title = re.sub(r"^\s*(帮我|帮忙|麻烦|请|给我|我要|我想)+[，,。；;、:：\s]*", "", title)
     title = re.sub(r"[，,。；;、！!？?：:\s]+", " ", title).strip()
+    title = re.sub(r"^(一个|一张|个|张|一)\s*", "", title)
     return (title or text)[:40]
 
 
@@ -344,17 +358,17 @@ class FakeChatModel(BaseChatModel):
         ticket = payload.get("ticket")
         if ticket:
             if payload.get("action") == "create_ticket":
-                head = "已存在相同问题的未关闭工单，没有重复创建" if payload.get("duplicated") else "工单已创建"
+                head = "已存在相同问题的未关闭售后工单，没有重复创建" if payload.get("duplicated") else "售后工单已创建"
                 return (
                     f"【演示模式】{head}：{ticket['id']}\n\n"
                     f"- 标题：{ticket['title']}\n"
                     f"- 分类：{ticket['category']} ／ 优先级：{ticket['priority']}\n"
                     f"- 状态：{ticket['status']}\n"
                     f"- 联系人：{ticket['contact']}\n\n"
-                    f"工程师会按 SLA 响应，期间你可以随时问「{ticket['id']} 处理到哪了」。"
+                    f"售后专员会在 SLA 内跟进，期间你可以随时问「{ticket['id']} 处理到哪了」。"
                 )
             if payload.get("action") == "escalate_to_human":
-                return f"【演示模式】工单 {ticket['id']} 已转人工，状态：{ticket['status']}。工程师会尽快接手。"
+                return f"【演示模式】售后工单 {ticket['id']} 已转人工，状态：{ticket['status']}。售后专员会尽快接手。"
             return f"【演示模式】工单 {ticket['id']} 当前状态：{ticket['status']}（{ticket['updated_at']} 更新）。"
 
         tickets = payload.get("tickets")

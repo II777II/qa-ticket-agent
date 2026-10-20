@@ -72,7 +72,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 
 | 工具 | 作用 | 关键参数 | 什么时候会被调用 | 返回 |
 | --- | --- | --- | --- | --- |
-| `create_ticket` | 建单 | `title` / `description` / `category`（6 类枚举）/ `priority`（4 档枚举）/ `contact` | 知识库解决不了、或用户明确要求建单 | `{ok, duplicated, ticket}` |
+| `create_ticket` | 创建售后工单 | `title` / `description` / `category`（7 类电商分类）/ `priority`（4 档枚举）/ `contact` | 帮助中心解决不了、或用户明确要求建单 | `{ok, duplicated, ticket}` |
 | `query_ticket` | 查进度、催单 | `ticket_id` / `contact` / `urge` | 用户问「处理到哪了」「催一下」「我的工单」 | `{ok, tickets[], message}` |
 | `escalate_to_human` | 转人工 | `ticket_id` / `reason` | 用户要求转人工、或超出能力范围 | `{ok, ticket}` |
 

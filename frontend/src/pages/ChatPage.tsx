@@ -202,7 +202,7 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
             知识库
           </button>
           <button type="button" className={panel === "tickets" ? "toggle active" : "toggle"} onClick={() => openPanel("tickets")}>
-            工单
+            售后工单
           </button>
         </header>
 
@@ -215,7 +215,7 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
                     <RobotOutlined />
                   </span>
                   <h2>有什么可以帮您？</h2>
-                  <p>知识库解决不了、或你明确要求时，我会帮你建工单。</p>
+                  <p>订单、物流、退换与发票问题可以问我，也可以让我创建售后工单。</p>
                   <div className="prompt-row">
                     {PROMPTS.map((prompt) => (
                       <button type="button" key={prompt} className="prompt-chip" onClick={() => submit(prompt)}>

@@ -76,7 +76,7 @@ export default function TicketPanel({
   return (
     <aside className="side-panel">
       <div className="panel-head">
-        <span className="panel-title">工单查询</span>
+        <span className="panel-title">售后工单</span>
         <Badge count={tickets.length} showZero color="#0d8f6f" />
         {mode === "turn" ? (
           <Button size="small" type="text" onClick={onLoadAll}>
@@ -120,7 +120,7 @@ export default function TicketPanel({
       {filtered.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={mode === "turn" ? "本轮没有产生或查询到工单" : "没有匹配的工单"}
+          description={mode === "turn" ? "本轮没有产生或查询到售后工单" : "没有匹配的售后工单"}
         />
       ) : (
         <div className="ticket-list">

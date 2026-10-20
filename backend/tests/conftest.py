@@ -92,9 +92,9 @@ def isolated_runtime(tmp_path: Path) -> AgentRuntime:
 @pytest.fixture()
 def sample_ticket() -> TicketCreate:
     return TicketCreate(
-        title="会议室打印机装不上驱动",
-        description="Win11 装企业驱动包时报签名校验失败，已卸载旧驱动。",
-        category="办公设备",
+        title="商品有质量问题，想申请售后",
+        description="收到的商品外壳有裂痕，已拍照，希望换货或退款。",
+        category="商品与质量",
         priority="中",
         contact="zhang.san@corp.com",
     )

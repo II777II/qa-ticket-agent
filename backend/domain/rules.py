@@ -14,7 +14,15 @@ from backend.domain.errors import UnknownStatusError
 if TYPE_CHECKING:  # 只用于类型标注，避免与 models.py 形成运行时循环导入
     from backend.domain.models import TicketCreate, TicketRecord
 
-TicketCategory = Literal["账号与权限", "网络与VPN", "办公设备", "邮件与协作", "业务系统", "其他"]
+TicketCategory = Literal[
+    "订单与支付",
+    "配送与物流",
+    "退换与售后",
+    "发票与报销",
+    "商品与质量",
+    "账户与安全",
+    "其他",
+]
 TicketPriority = Literal["紧急", "高", "中", "低"]
 TicketStatus = Literal["待受理", "处理中", "待用户确认", "已关闭"]
 

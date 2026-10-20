@@ -38,10 +38,10 @@ def create_tools(tickets: TicketService) -> list[BaseTool]:
         priority: str,
         contact: str,
     ) -> str:
-        """当知识库无法解决用户问题、或用户明确要求时，创建一张 IT 服务台工单。
+        """当帮助中心无法解决订单/物流/售后问题、或用户明确要求时，创建一张售后工单。
 
-        所有字段都要来自用户的真实描述：信息不全（尤其是联系人）时先追问，不要用
-        「未知」「同上」这类占位内容凑数，也不要在用户只是咨询时建单。
+        所有字段都要来自用户的真实描述：信息不全（尤其是订单号/联系人）时先追问，
+        不要用「未知」「同上」这类占位内容凑数，也不要在用户只是咨询时建单。
         """
         record, duplicated = tickets.create(
             TicketCreate(

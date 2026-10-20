@@ -38,7 +38,7 @@ class TicketCreate(BaseModel):
     )
     contact: str = Field(
         min_length=2,
-        description="联系人（工号或邮箱），工程师据此回访；用户没给就先追问",
+        description="联系人（手机号/邮箱/会员号），售后专员据此回访；用户没给就先追问",
     )
 
 

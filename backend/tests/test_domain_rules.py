@@ -24,7 +24,7 @@ def _record(ticket_id: str, title: str = "VPN 连不上报 691", contact: str = 
         id=ticket_id,
         title=title,
         description="整个部门都连不上，已确认内网可访问。",
-        category="网络与VPN",
+        category="配送与物流",
         priority="高",
         contact=contact,
         status=status,
@@ -67,7 +67,7 @@ def test_duplicate_of_matches_same_contact_and_title() -> None:
     payload = TicketCreate(
         title="VPN 连不上报 691",
         description="整个部门都连不上，已确认内网可访问。",
-        category="网络与VPN",
+        category="配送与物流",
         priority="高",
         contact="A@CORP.com",  # 大小写不同也算同一个人
     )
@@ -79,7 +79,7 @@ def test_duplicate_of_ignores_closed_ticket() -> None:
     payload = TicketCreate(
         title="VPN 连不上报 691",
         description="整个部门都连不上，已确认内网可访问。",
-        category="网络与VPN",
+        category="配送与物流",
         priority="高",
         contact="a@corp.com",
     )
@@ -91,14 +91,14 @@ def test_duplicate_of_ignores_different_contact_or_title() -> None:
     other_contact = TicketCreate(
         title="VPN 连不上报 691",
         description="另一个同事也连不上。",
-        category="网络与VPN",
+        category="配送与物流",
         priority="中",
         contact="b@corp.com",
     )
     other_title = TicketCreate(
         title="打印机装不上驱动",
         description="Win11 报签名校验失败。",
-        category="办公设备",
+        category="商品与质量",
         priority="中",
         contact="a@corp.com",
     )

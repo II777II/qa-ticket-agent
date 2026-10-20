@@ -68,7 +68,7 @@ def test_add_event_on_unknown_ticket_returns_none(store: JsonTicketStore) -> Non
 
 def test_list_filters(store: JsonTicketStore, sample_ticket: TicketCreate) -> None:
     first, _ = store.create(sample_ticket)
-    store.create(sample_ticket.model_copy(update={"title": "VPN 连不上报 691", "category": "网络与VPN"}))
+    store.create(sample_ticket.model_copy(update={"title": "物流三天不更新", "category": "配送与物流"}))
     store.add_event(first.id, "转人工", status="处理中")
 
     assert len(store.list()) == 2
@@ -111,7 +111,7 @@ def test_skips_invalid_record_but_keeps_others(tmp_path: Path) -> None:
                 "id": "TK-20260101-0001",
                 "title": "邮箱收不到外部邮件",
                 "description": "从上周开始外部发件人全部被拦。",
-                "category": "邮件与协作",
+                "category": "发票与报销",
                 "priority": "中",
                 "contact": "li.si@corp.com",
                 "created_at": "2026-01-01 09:00:00",

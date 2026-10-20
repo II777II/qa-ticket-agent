@@ -74,7 +74,7 @@ def test_tickets_flow(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
     assert asyncio.run(_get("/api/tickets")).json() == []
 
-    events = asyncio.run(_stream_chat("帮我建个工单，会议室打印机装不上驱动，联系我 li.si@corp.com", "api-1"))
+    events = asyncio.run(_stream_chat("帮我建个售后工单，商品有质量问题，联系我 li.si@corp.com", "api-1"))
     tickets = [payload["tickets"][0] for event, payload in events if event == "ticket"]
     assert tickets, "建单后应收到 ticket 事件"
     ticket_id = tickets[0]["id"]
@@ -136,7 +136,7 @@ def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
 
 def test_chat_sse_tool_and_ticket_events(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
-    events = asyncio.run(_stream_chat("帮我建个工单，VPN 报 691，整个部门都连不上，联系我 wang.wu@corp.com", "api-3"))
+    events = asyncio.run(_stream_chat("帮我建个售后工单，商品有质量问题，联系我 wang.wu@corp.com", "api-3"))
     tools = [(payload["phase"], payload["name"]) for name, payload in events if name == "tool"]
     assert ("call", "create_ticket") in tools
     assert ("result", "create_ticket") in tools

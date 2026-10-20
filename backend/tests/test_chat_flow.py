@@ -41,12 +41,12 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     assert not consulted["tickets"]
 
     # 2. 明确要求建单：走 create_ticket
-    created = _turn(runtime, "帮我建个工单，会议室打印机装不上驱动，联系我 zhang.san@corp.com", thread)
+    created = _turn(runtime, "帮我建个售后工单，商品有质量问题，联系我 zhang.san@corp.com", thread)
     tool_names = [tool["name"] for tool in created["tools"]]
     assert "create_ticket" in tool_names
     assert len(created["tickets"]) == 1
     ticket = created["tickets"][0]
-    assert ticket["category"] == "办公设备"
+    assert ticket["category"] == "商品与质量"
     assert ticket["status"] == "待受理"
     assert ticket["contact"] == "zhang.san@corp.com"
 
@@ -69,13 +69,13 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
 
 def test_ticket_is_persisted_to_json(isolated_runtime: AgentRuntime) -> None:
     """对话建的工单必须落到工单文件里——重启进程不丢。"""
-    created = _turn(isolated_runtime, "帮我建个工单，邮箱收不到外部邮件，联系我 li.si@corp.com", "flow-2")
+    created = _turn(isolated_runtime, "帮我建个售后工单，发票开不出来，联系我 li.si@corp.com", "flow-2")
     ticket_id = created["tickets"][0]["id"]
 
     payload = json.loads(isolated_runtime.store.path.read_text(encoding="utf-8"))
     stored = {item["id"]: item for item in payload["tickets"]}
     assert ticket_id in stored
-    assert stored[ticket_id]["category"] == "邮件与协作"
+    assert stored[ticket_id]["category"] == "发票与报销"
 
 
 def test_threads_do_not_share_memory(isolated_runtime: AgentRuntime) -> None:

@@ -41,7 +41,7 @@ def test_tool_branch_creates_ticket(store: JsonTicketStore) -> None:
     """说「帮我建个工单」→ 走 tools 节点 → 回到 agent 总结。"""
     graph, _ = _build(store)
     state = graph.invoke(
-        {"messages": [HumanMessage(content="帮我建个工单，整个部门都连不上 VPN，联系我 zhang.san@corp.com")]},
+        {"messages": [HumanMessage(content="帮我建个售后工单，商品有质量问题，联系我 zhang.san@corp.com")]},
         {"configurable": {"thread_id": "t2"}},
     )
     assert any(isinstance(message, ToolMessage) for message in state["messages"])

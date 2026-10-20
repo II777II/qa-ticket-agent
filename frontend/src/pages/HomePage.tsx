@@ -34,7 +34,7 @@ export default function HomePage({ info }: { info: AgentInfo | null }) {
 
       <main className="home-main">
         <h1>有什么可以帮您？</h1>
-        <p className="home-sub">企业智能问答 · 知识库检索与工单处理一体化</p>
+        <p className="home-sub">电商智能客服 · 订单查询与知识库问答一体化</p>
         <Composer
           large
           value={value}

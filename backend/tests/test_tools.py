@@ -36,9 +36,9 @@ def test_create_ticket_returns_payload(store: JsonTicketStore) -> None:
     payload = json.loads(
         tool.invoke(
             {
-                "title": "VPN 连不上报 691",
-                "description": "整个部门从今天早上开始连不上，已确认内网可访问。",
-                "category": "网络与VPN",
+                "title": "物流三天没有更新",
+                "description": "包裹显示已揽收，但物流三天没有更新，联系快递未果。",
+                "category": "配送与物流",
                 "priority": "高",
                 "contact": "zhang.san@corp.com",
             }
@@ -74,7 +74,7 @@ def test_create_ticket_rejects_short_description(store: JsonTicketStore) -> None
             {
                 "title": "打印机坏了",
                 "description": "坏了",
-                "category": "办公设备",
+                "category": "商品与质量",
                 "priority": "中",
                 "contact": "zhang.san@corp.com",
             }
@@ -88,7 +88,7 @@ def test_query_ticket_by_id(store: JsonTicketStore) -> None:
             {
                 "title": "邮箱容量满了",
                 "description": "收不到新邮件，提示超过配额。",
-                "category": "邮件与协作",
+                "category": "发票与报销",
                 "priority": "中",
                 "contact": "li.si@corp.com",
             }
@@ -107,7 +107,7 @@ def test_query_ticket_urge_records_timeline(store: JsonTicketStore) -> None:
             {
                 "title": "打印机驱动装不上",
                 "description": "Win11 装驱动报签名校验失败，已卸载旧驱动。",
-                "category": "办公设备",
+                "category": "商品与质量",
                 "priority": "中",
                 "contact": "li.si@corp.com",
             }
@@ -136,9 +136,9 @@ def test_escalate_to_human_changes_status(store: JsonTicketStore) -> None:
     created = json.loads(
         _by_name(tools, "create_ticket").invoke(
             {
-                "title": "业务系统打不开",
-                "description": "打开门户后报表模块一直转圈，已换浏览器复现。",
-                "category": "业务系统",
+                "title": "商品外壳有裂痕",
+                "description": "收到的商品外壳有明显裂痕，已拍照，需要换货。",
+                "category": "商品与质量",
                 "priority": "高",
                 "contact": "wang.wu@corp.com",
             }
