@@ -6,6 +6,7 @@
     tool      工具调用与返回
     ticket    产生或查到的工单
     order     查到的订单（query_order 结果）
+    service_draft 业务办理草稿与缺失槽位
     citation  检索引用
     done      一轮结束
     error     出错
@@ -23,5 +24,6 @@ EVENT_TOOL = "tool"
 EVENT_CITATION = "citation"
 EVENT_TICKET = "ticket"
 EVENT_ORDER = "order"
+EVENT_SERVICE_DRAFT = "service_draft"
 EVENT_DONE = "done"
 EVENT_ERROR = "error"

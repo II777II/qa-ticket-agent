@@ -6,6 +6,7 @@ import Composer from "../components/Composer";
 import KnowledgePanel from "../components/KnowledgePanel";
 import MessageList from "../components/MessageList";
 import OrderPanel from "../components/OrderPanel";
+import ServicePanel from "../components/ServicePanel";
 import Sidebar from "../components/Sidebar";
 import { useChat } from "../hooks/useChat";
 import { useConversations } from "../hooks/useConversations";
@@ -27,7 +28,7 @@ export interface ChatPageProps {
 
 /** 第 2/3/4 屏：会话列表 + 对话；右侧面板跟随「某一轮问答」，而不是全局缓存。 */
 export default function ChatPage({ info, initialPanel }: ChatPageProps) {
-  const { messages, busy, threadId, send, stop, reset, hydrate } = useChat();
+  const { messages, busy, threadId, send, stop, reset, hydrate, updateServiceDraft } = useChat();
   const { items, save, remove } = useConversations();
 
   const [input, setInput] = useState("");
@@ -141,7 +142,7 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
   };
 
   /** 点击历史消息里的引用/订单标签：把右侧面板切到那一轮 */
-  const focusTurn = (messageKey: string, target: "knowledge" | "orders") => {
+  const focusTurn = (messageKey: string, target: "knowledge" | "orders" | "service") => {
     setFocusedTurnKey(messageKey);
     setKnowledgeOverride(null);
     setPanel(target);
@@ -198,6 +199,9 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
           <button type="button" className={panel === "orders" ? "toggle active" : "toggle"} onClick={() => openPanel("orders")}>
             订单
           </button>
+          <button type="button" className={panel === "service" ? "toggle active" : "toggle"} onClick={() => openPanel("service")}>
+            业务办理
+          </button>
         </header>
 
         <div className="workspace">
@@ -245,6 +249,16 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
           )}
           {panel === "orders" && (
             <OrderPanel orders={turn?.ai.orders ?? []} question={turn?.question ?? ""} />
+          )}
+          {panel === "service" && (
+            <ServicePanel
+              key={turn?.ai.key ?? "service-empty"}
+              draft={turn?.ai.serviceDraft ?? null}
+              question={turn?.question ?? ""}
+              onUpdate={(draft) => {
+                if (turn) updateServiceDraft(turn.ai.key, draft);
+              }}
+            />
           )}
         </div>
       </div>

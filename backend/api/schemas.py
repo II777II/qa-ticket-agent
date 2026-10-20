@@ -1,6 +1,6 @@
 """接口层数据结构：HTTP 请求体 / 响应体 + SSE 编码。
 
-事件名本身（start / token / tool / ticket / citation / done / error）定义在
+事件名本身（start / intent / token / order / service_draft / citation / done / error）定义在
 application/chat/events.py——那是应用层与接口层之间的契约；这里只负责把
 「事件名 + 载荷」编码成 SSE 报文。
 """
@@ -11,6 +11,10 @@ import json
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+from backend.domain.intent import ServiceType
+from backend.domain.rules import TicketCategory, TicketPriority
+
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, description="用户这一轮说的话")
@@ -66,6 +70,25 @@ class KnowledgeHit(BaseModel):
     snippet: str = ""
     score: float | None = None
     coverage: float | None = None
+
+
+class ServiceConfirmRequest(BaseModel):
+    """用户在前端业务办理面板确认后的提交载荷。"""
+
+    order_no: str = Field(pattern=r"^SO\d{12}$", description="关联订单号")
+    contact: str = Field(min_length=2, max_length=120, description="回访联系人")
+    service_type: ServiceType = Field(description="退货、换货、维修等业务类型")
+    category: TicketCategory = Field(description="售后工单分类")
+    priority: TicketPriority = Field(default="中", description="业务优先级")
+    description: str = Field(min_length=10, max_length=2000, description="用户确认后的问题描述")
+
+
+class ServiceConfirmResponse(BaseModel):
+    ok: bool = True
+    ticket_id: str
+    status: str
+    duplicated: bool = False
+    message: str = ""
 
 
 class MetricsKpi(BaseModel):

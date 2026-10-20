@@ -14,6 +14,9 @@ import type {
   IntentEvent,
   OrderRecord,
   OrderSummary,
+  ServiceConfirmPayload,
+  ServiceConfirmResult,
+  ServiceDraft,
   StreamHandlers,
   Ticket,
 } from "../types";
@@ -71,6 +74,13 @@ export function listOrders(params: { q?: string; status?: number; user_id?: numb
 
 export function getOrder(orderNo: string): Promise<OrderRecord> {
   return requestJson<OrderRecord>(`/api/orders/${encodeURIComponent(orderNo)}`);
+}
+
+export function confirmService(payload: ServiceConfirmPayload): Promise<ServiceConfirmResult> {
+  return requestJson<ServiceConfirmResult>("/branch/service/confirm", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function listArticles(params: { q?: string; category?: string; limit?: number }): Promise<KnowledgeArticle[]> {
@@ -187,6 +197,9 @@ function dispatch(
       break;
     case "intent":
       handlers.onIntent?.(payload as unknown as IntentEvent);
+      break;
+    case "service_draft":
+      handlers.onServiceDraft?.(payload as unknown as ServiceDraft);
       break;
     case "citation":
       handlers.onCitation?.({

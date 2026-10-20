@@ -104,8 +104,35 @@ def test_service_branch_builds_draft_only(store: JsonTicketStore) -> None:
     )
     assert state["intent"] == "service"
     assert state["draft"]["status"] == "draft"
+    assert state["draft"]["contact"] == "a@corp.com"
+    assert "order_no" in state["draft"]["missing"]
+    assert "service_type" in state["draft"]["missing"]
+    assert state["draft"]["requires_confirmation"] is True
     assert "草稿" in state["messages"][-1].content
     assert store.count() == 0  # 只生成草稿，不直接建单
+
+
+def test_service_draft_recognizes_complete_slots(store: JsonTicketStore) -> None:
+    graph = _build(store)
+    state = graph.invoke(
+        {
+            "messages": [
+                HumanMessage(
+                    content="订单 SO202609150020 的商品损坏，申请换货，联系电话 13800138000"
+                )
+            ]
+        },
+        {"configurable": {"thread_id": "service-ready"}},
+    )
+    draft = state["draft"]
+    assert state["intent"] == "service"
+    assert draft["ready"] is True
+    assert draft["missing"] == []
+    assert draft["order_no"] == "SO202609150020"
+    assert draft["contact"] == "13800138000"
+    assert draft["service_type"] == "换货"
+    assert draft["slots"]["service_type"] == "换货"
+    assert store.count() == 0
 
 
 def test_fallback_branch_for_complaint(store: JsonTicketStore) -> None:

@@ -22,8 +22,8 @@ function body(message: ChatMessage) {
 
 export interface MessageListProps {
   messages: ChatMessage[];
-  /** 把右侧面板切到「这一轮」的知识库/工单结果 */
-  onFocusTurn?: (messageKey: string, panel: "knowledge" | "orders") => void;
+  /** 把右侧面板切到「这一轮」的知识库/订单/业务办理结果 */
+  onFocusTurn?: (messageKey: string, panel: "knowledge" | "orders" | "service") => void;
 }
 
 export default function MessageList({ messages, onFocusTurn }: MessageListProps) {
@@ -62,6 +62,18 @@ export default function MessageList({ messages, onFocusTurn }: MessageListProps)
                 {order.order_no} · {order.status}
               </button>
             ))}
+          </div>
+        )}
+        {message.serviceDraft && (
+          <div className="cite-row">
+            <button
+              type="button"
+              className="cite cite-service"
+              onClick={() => onFocusTurn?.(message.key, "service")}
+            >
+              {message.serviceDraft.service_type || "业务办理"} ·{" "}
+              {message.serviceDraft.ready ? "待确认" : `缺少 ${message.serviceDraft.missing.length} 项`}
+            </button>
           </div>
         )}
       </div>

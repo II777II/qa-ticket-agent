@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（96 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、检索、存储、工具、接口与整链；
+- **自动化用例**（100 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 96 passed in ~10s
+python -m pytest              # 100 passed in ~12s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -69,7 +69,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | G-03 | 强制状态清理 | 同一 thread 先强制 fallback，下一轮传 None | 下一轮恢复自动分类为 knowledge |
 | G-04 | 引用写回 state | 问「退款多久到账」 | `retrieved` 非空，第一条来源 `KB-EC-0020.html`，片段长度 ≤ 160 |
 | G-05 | 订单分支跳过 RAG | 问「帮我查询张三的订单」 | `orders` 非空、`retrieved == []` |
-| G-06 | 售后草稿只读 | 说「商品损坏了，帮我建个工单」 | 返回草稿，存储仍为 0 张 |
+| G-06 | 售后草稿与缺失槽位 | 说「商品损坏了，帮我建个工单」 | 返回草稿、识别联系人，提示订单号和业务类型缺失，存储仍为 0 张 |
 | G-07 | 投诉走兜底 | 说「我要投诉」 | 命中 fallback 话术 |
 | G-08 | 检索异常降级 | 注入会抛异常的检索器 | 仍返回回答，`retrieved == []`，不抛错 |
 | G-09 | 会话隔离 | 两个 thread_id 各问一轮 | 各自消息累积，互不串味 |
@@ -82,13 +82,16 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-02 | 能力查询 | `GET /api/agent-info` | 200，kb_documents=50、orders=50，只暴露 `tool:query_order` |
 | A-03 | 根路径 | `GET /` | 200，Content-Type 为 html（已构建）或 json（未构建） |
 | A-04 | 旧工单接口已卸载 | `GET /api/tickets` 与详情路径 | 均返回 404 |
-| A-05 | 路由装配 | 读取 OpenAPI paths | 含 `/chat` 与四个 `/branch/*`，不含 `/api/tickets` |
+| A-05 | 路由装配 | 读取 OpenAPI paths | 含 `/chat`、四个 `/branch/*` 与 `/branch/service/confirm`，不含 `/api/tickets` |
 | A-06 | SSE 事件契约（咨询） | 流式问「退款多久到账」 | 序列以 start 开头、done 结尾，含 token 与 citation，**不含** tool/ticket，正文含 `[1]` |
 | A-07 | 对话不建工单 | 流式说「帮我建个工单」 | 不出现 create_ticket 或 ticket 事件 |
 | A-08 | 空消息拦截 | `POST /chat` 传空 message | 422，不进图 |
 | A-09 | 订单 SSE | `POST /chat` 问「帮我查询张三的订单」 | intent=query，含 order、无 citation |
 | A-10 | 四路显式 HTTP 入口 | 同一句分别请求四个 `/branch/*` | intent 事件分别等于 knowledge / query / service / fallback |
 | A-11 | 分支状态不串线 | 同一 thread 先走 `/branch/fallback`，再走 `/chat` | `/chat` 清除强制意图并自动分流到 knowledge |
+| A-12 | 业务草稿 SSE | 问包含订单号、换货、联系人的售后问题 | 收到 `service_draft`，四个槽位完整，ready=true，未写工单 |
+| A-13 | 确认后建单 | 提交 `/branch/service/confirm` | 200，返回 TK 单号并新增工单；重复提交返回原工单 |
+| A-14 | 无效订单拒绝 | 提交不存在的订单号 | 404，不创建工单 |
 
 ## 六、整链（`test_chat_flow.py`）
 
@@ -105,7 +108,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | 编号 | 用例 | 步骤 | 预期 |
 | --- | --- | --- | --- |
 | M-01 | 流式打字效果 | 发送任意问题 | 文字逐段出现，不是一次性刷出；发送中按钮变「停止」 |
-| M-02 | 售后草稿展示 | 问「商品损坏了，帮我建个工单」 | 显示草稿与缺失槽位，不出现已创建工单 |
+| M-02 | 售后草稿展示 | 问「商品损坏了，帮我建个工单」 | 业务办理面板显示已识别槽位与缺失提醒，不自动建单 |
 | M-03 | 引用展示 | 问「退款多久到账」 | 气泡底部出现 `[1] 知识库文章 · 小节标题（相关度）` |
 | M-04 | 订单面板同步 | 问「帮我查询张三的订单」 | 右侧显示本轮订单，不残留上一轮结果 |
 | M-05 | 订单详情 | 点订单结果 | 显示状态、金额、商品与收货人摘要 |
@@ -123,6 +126,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | M-17 | 知识库检索页 | 打开 `#/kb`，输入「退款到账」并切换分类 | 文章列表与 RAG 命中同时更新；点击文章在新标签打开对应 HTML 页面 |
 | M-18 | 对话查订单 | 在对话里输入「帮我查询张三的订单」 | 列出订单并切换右侧订单面板；没有引用、没有新建工单 |
 | M-19 | 意图路由徽标 | 依次输入退款问答、张三订单、商品损坏、我要投诉 | 顶栏路由依次显示：知识咨询 / 订单查询 / 业务办理 / 兜底·转人工 |
+| M-20 | 业务办理确认 | 补齐业务类型、订单号、联系人、描述并勾选确认 | “确认提交”前不可用；提交后显示工单号和状态 |
 
 ## 八、需求 → 用例覆盖
 
@@ -130,7 +134,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | --- | --- |
 | 智能问答、多轮对话、引用来源 | R-03/R-04/R-08、G-04/G-05/G-08、A-06、E-01、M-01/M-03/M-08 |
 | 四路意图识别与 HTTP 分支路由 | G-01/G-02、A-05/A-10/A-11、E-01、M-19 |
-| 售后业务草稿（不直接建单） | G-06、A-07、E-02、M-02 |
+| 业务办理草稿与用户确认 | G-06、A-07/A-12/A-13/A-14、E-02、M-02/M-20 |
 | 记忆与编排、异常降级 | G-03/G-08/G-09、E-03、A-11 |
 | 知识库检索准确性 | R-01~R-09、G-04/G-05、A-06 |
 | 工具参数校验防幻觉建单 | T-03/T-04、S-02 |

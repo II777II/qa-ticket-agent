@@ -17,6 +17,8 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 ORDER_NO_RE = re.compile(r"SO\d{12}", re.IGNORECASE)
+EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 
 ORDER_LOOKUP_HINTS = (
     "我的订单", "查订单", "查询订单", "订单查询", "订单进度", "订单状态",
@@ -32,6 +34,16 @@ AFTER_SALES_HINTS = ("退货", "换货", "维修", "保修", "价保", "质量�
 FALLBACK_HINTS = ("投诉", "差评", "转人工", "人工客服", "客服电话", "在吗", "你好", "您好", "嗨", "谢谢", "闲聊")
 
 IntentName = Literal["knowledge", "query", "service", "fallback"]
+ServiceType = Literal["退货", "换货", "维修", "退款", "补发", "价保", "其他"]
+
+SERVICE_TYPE_RULES: tuple[tuple[ServiceType, tuple[str, ...]], ...] = (
+    ("换货", ("换货", "换新")),
+    ("退货", ("退货", "退掉")),
+    ("维修", ("维修", "保修")),
+    ("退款", ("退款", "退钱")),
+    ("补发", ("补发", "重发")),
+    ("价保", ("价保", "保价")),
+)
 
 
 class IntentResult(BaseModel):
@@ -73,6 +85,26 @@ def guess_category(text: str) -> str:
     return best_category
 
 
+def extract_service_slots(text: str) -> dict[str, str]:
+    """从业务办理话术里抽取面板可直接展示和编辑的槽位。"""
+    slots: dict[str, str] = {}
+    order_no = ORDER_NO_RE.search(text)
+    if order_no:
+        slots["order_no"] = order_no.group(0).upper()
+
+    contact = EMAIL_RE.search(text) or PHONE_RE.search(text)
+    if contact:
+        slots["contact"] = contact.group(0)
+
+    for service_type, hints in SERVICE_TYPE_RULES:
+        if any(hint in text for hint in hints):
+            slots["service_type"] = service_type
+            break
+
+    slots["category"] = guess_category(text)
+    return slots
+
+
 def detect_intent(text: str) -> str:
     """兼容旧接口：order_lookup / after_sales / knowledge。"""
     result = rule_classify(text)
@@ -85,6 +117,18 @@ def rule_classify(text: str) -> IntentResult:
     asks_lookup = any(verb in text for verb in ORDER_LOOKUP_VERBS)
     excludes = any(word in text for word in KNOWLEDGE_EXCLUSIONS)
     order_no = ORDER_NO_RE.search(text)
+    has_service_action = any(hint in text for hint in CREATE_HINTS) or any(
+        hint in text for hint in AFTER_SALES_HINTS
+    )
+    if has_service_action:
+        slots = extract_service_slots(text)
+        slots["category"] = slots.get("category") or guess_category(text)
+        return IntentResult(
+            intent="service",
+            confidence=0.85,
+            reason="命中售后/业务办理关键词",
+            slots=slots,
+        )
     if (
         order_no
         or any(hint in text for hint in ORDER_LOOKUP_HINTS)
@@ -92,13 +136,6 @@ def rule_classify(text: str) -> IntentResult:
     ):
         slots = {"order_no": order_no.group(0).upper()} if order_no else {"keyword": extract_order_keyword(text)}
         return IntentResult(intent="query", confidence=0.9, reason="命中订单查询关键词/订单号", slots=slots)
-    if any(hint in text for hint in CREATE_HINTS) or any(hint in text for hint in AFTER_SALES_HINTS):
-        return IntentResult(
-            intent="service",
-            confidence=0.85,
-            reason="命中售后/业务办理关键词",
-            slots={"category": guess_category(text)},
-        )
     if any(hint in text for hint in FALLBACK_HINTS):
         return IntentResult(intent="fallback", confidence=0.8, reason="投诉/闲聊/转人工")
     return IntentResult(intent="knowledge", confidence=0.6, reason="默认走知识库问答")

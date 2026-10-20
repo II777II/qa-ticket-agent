@@ -7,7 +7,15 @@
 import { useCallback, useRef, useState } from "react";
 
 import { streamChat } from "../api/agent";
-import type { ChatMessage, IntentEvent, OrderSummary, Ticket, ToolCallView, ToolEvent } from "../types";
+import type {
+  ChatMessage,
+  IntentEvent,
+  OrderSummary,
+  ServiceDraft,
+  Ticket,
+  ToolCallView,
+  ToolEvent,
+} from "../types";
 
 function newKey(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -51,6 +59,7 @@ export interface UseChatResult {
   send: (text: string, onTicket?: (tickets: Ticket[]) => void) => Promise<void>;
   stop: () => void;
   reset: () => void;
+  updateServiceDraft: (messageKey: string, draft: ServiceDraft) => void;
   /** 从历史会话恢复消息（thread_id 一并恢复，后端短期记忆仍按它隔离） */
   hydrate: (messages: ChatMessage[], threadId: string) => void;
 }
@@ -99,6 +108,8 @@ export function useChat(): UseChatResult {
             onOrder: (orders) =>
               patch((message) => ({ ...message, loading: false, orders: mergeOrders(message.orders, orders) })),
             onIntent: (intent: IntentEvent) => patch((message) => ({ ...message, intent })),
+            onServiceDraft: (serviceDraft: ServiceDraft) =>
+              patch((message) => ({ ...message, loading: false, serviceDraft })),
             onCitation: (citation) =>
               patch((message) => ({ ...message, citations: [...message.citations, citation] })),
             onError: (error) =>
@@ -127,6 +138,14 @@ export function useChat(): UseChatResult {
     controllerRef.current?.abort();
   }, []);
 
+  const updateServiceDraft = useCallback((messageKey: string, draft: ServiceDraft) => {
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.key === messageKey ? { ...message, serviceDraft: draft } : message,
+      ),
+    );
+  }, []);
+
   const reset = useCallback(() => {
     controllerRef.current?.abort();
     setMessages([]);
@@ -141,5 +160,5 @@ export function useChat(): UseChatResult {
     setThreadId(nextThreadId);
   }, []);
 
-  return { messages, busy, threadId, send, stop, reset, hydrate };
+  return { messages, busy, threadId, send, stop, reset, updateServiceDraft, hydrate };
 }

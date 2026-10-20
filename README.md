@@ -79,6 +79,7 @@ python -m uvicorn backend.api.app:app --port 5179
 | POST | `/branch/knowledge` | 强制进入知识库问答分支（SSE） |
 | POST | `/branch/query` | 强制进入订单查询分支（SSE） |
 | POST | `/branch/service` | 强制进入售后业务草稿分支（SSE） |
+| POST | `/branch/service/confirm` | 用户确认后提交业务办理并创建售后工单 |
 | POST | `/branch/fallback` | 强制进入兜底分支（SSE） |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
@@ -91,8 +92,9 @@ python -m uvicorn backend.api.app:app --port 5179
 | GET | `/api/orders/{order_no}` | 订单详情（明细、地址、支付、退款、状态时间线） |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
-所有对话接口共用 `start` / `intent` / `token` / `order` / `citation` / `done` / `error`
-事件契约。售后工单的领域与应用能力仍保留，但不再挂 HTTP 路由，也不再由对话侧直接创建。
+所有对话接口共用 `start` / `intent` / `token` / `order` / `service_draft` /
+`citation` / `done` / `error` 事件契约。业务草稿阶段只读；只有用户点击“确认提交”并
+调用 `/branch/service/confirm` 后才创建售后工单。
 
 ## 界面（5 个页面）
 
@@ -104,6 +106,7 @@ python -m uvicorn backend.api.app:app --port 5179
 | `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，引用与订单标签渲染在气泡底部 |
 | `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出**这一轮**问答的 Top-K 检索命中（来源、小节、相关度、片段） |
 | `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** `query_order` 查到的订单（单号/状态/金额/商品/收货人） |
+| `#/chat?panel=service` | 对话 + 业务办理 | 右侧编辑槽位、查看缺失提醒，并在核对后确认提交 |
 | `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
 | `#/kb` | 知识库检索 | 8 个分类浏览 50 篇 HTML；关键词检索 + RAG 命中片段，点击打开 HTML 原文 |
 | `#/admin` | 后台管理 | Token 消耗、平均首字延迟、请求总量、错误率、7 天趋势、模型调用明细 |
@@ -112,7 +115,8 @@ python -m uvicorn backend.api.app:app --port 5179
 页脚/侧栏显示当前 git 短 hash，方便对照改前/改后版本。
 
 右侧面板按「轮次」绑定：新提问后面板自动切到新一轮（结果为空时不会残留上一轮的内容）；
-点历史消息里的引用/订单标签，面板会切回那一轮的数据。对话侧不再提供售后工单，只做知识库问答与订单查询。
+点历史消息里的引用/订单/业务草稿标签，面板会切回那一轮的数据。业务办理必须先由用户核对并确认，
+前端不会在生成草稿时自动创建工单。
 
 ## 对话路由（四路）
 
@@ -122,17 +126,20 @@ python -m uvicorn backend.api.app:app --port 5179
 | --- | --- | --- | --- | --- |
 | `knowledge` 知识咨询 | `POST /branch/knowledge` | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
 | `query` 订单查询 | `POST /branch/query` | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `OrderService`，不检索 | `order` + `token` |
-| `service` 业务办理 | `POST /branch/service` | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 生成**工单草稿**并追问缺失槽位，不直接建单 | `token`（草稿文本） |
+| `service` 业务办理 | `POST /branch/service` | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 识别槽位、生成可编辑草稿并提示缺失项；确认后提交 | `service_draft` + `token` |
 | `fallback` 兜底 | `POST /branch/fallback` | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
 
 分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
 每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。`/chat` 负责自动分类；
 `/branch/*` 则由 HTTP 路径直接锁定意图，便于联调、测试和后续按分支独立扩展。
 
+业务办理槽位包括业务类型、订单号、联系人和问题描述。缺失项会在右侧高亮；
+信息齐全后仍需勾选核对声明并点击“确认提交”，随后由 `/branch/service/confirm` 创建工单。
+
 ## 测试
 
 ```powershell
-python -m pytest            # 96 个用例，约 10 秒
+python -m pytest            # 100 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -192,7 +199,7 @@ backend/
   application/         应用层
     runtime.py         装配：调工厂拼出运行时（不含业务动作）
     agent/             Agent 关注点：graph.py（编排）、tools.py（工具适配）、prompts.py（提示词）
-    chat/service.py    用例：一轮对话（驱动图 + 翻译成 token/tool/ticket/citation 事件）
+    chat/service.py    用例：一轮对话（驱动图 + 翻译 token/order/service_draft/citation 事件）
     tickets/service.py 用例：建单 / 查进度 / 催单 / 转人工
     orders/service.py  用例：电商订单查询
     knowledge/service.py 用例：知识库目录浏览/搜索
@@ -221,7 +228,7 @@ frontend/
   src/router.ts        hash 路由（#/、#/chat、#/orders、#/kb、#/admin）
   src/App.tsx          路由分发 + 后端信息 + 离线提示
   src/pages/           HomePage / ChatPage / OrdersPage / KnowledgePage / AdminPage
-  src/components/      Sidebar / Composer / MessageList / KnowledgePanel / OrderPanel
+    src/components/      Sidebar / Composer / MessageList / KnowledgePanel / OrderPanel / ServicePanel
                        / KpiCard / TrendChart / VersionBadge / SiteSidebar
   src/hooks/           useChat（流式与会话恢复）、useConversations（localStorage 历史）
   src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单/知识库/指标查询
@@ -246,6 +253,7 @@ app
         ├── POST /branch/knowledge
         ├── POST /branch/query
         ├── POST /branch/service
+        ├── POST /branch/service/confirm
         └── POST /branch/fallback
 ```
 

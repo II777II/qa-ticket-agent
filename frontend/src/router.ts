@@ -1,7 +1,7 @@
 /**
  * 极简 hash 路由。
  *
- * `#/` 首页、`#/chat` 对话（可带 ?panel=knowledge|orders）、`#/orders`、`#/kb`、`#/admin`。
+ * `#/` 首页、`#/chat` 对话（可带 ?panel=knowledge|orders|service）、`#/orders`、`#/kb`、`#/admin`。
  * 用 hash 而不是 history 路由：前端产物由后端同源托管时，深链接需要服务端 SPA fallback，
  * hash 路由对静态托管没有任何额外要求，POC 够用。
  */
@@ -30,7 +30,7 @@ export function parseRoute(hash: string): AppRoute {
           : "home";
   return {
     page,
-    panel: panel === "knowledge" || panel === "orders" ? panel : "none",
+    panel: panel === "knowledge" || panel === "orders" || panel === "service" ? panel : "none",
   };
 }
 

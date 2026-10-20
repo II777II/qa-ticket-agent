@@ -11,7 +11,6 @@ POC 的 service 分支只生成「工单草稿」并追问缺失槽位，不直�
 
 from __future__ import annotations
 
-import re
 from typing import Any, Callable, NotRequired, Sequence
 
 from langchain_core.language_models import BaseChatModel
@@ -24,7 +23,13 @@ from backend.application.agent.classifier import classify_intent
 from backend.application.agent.prompts import SYSTEM_PROMPT
 from backend.application.orders import OrderService
 from backend.application.orders.service import order_summary
-from backend.domain.intent import IntentName, ORDER_NO_RE, extract_order_keyword, guess_category
+from backend.domain.intent import (
+    IntentName,
+    ORDER_NO_RE,
+    extract_order_keyword,
+    extract_service_slots,
+    guess_category,
+)
 from backend.infrastructure.retrieval.in_memory import format_context
 
 INTENTS = {"knowledge", "query", "service", "fallback"}
@@ -165,40 +170,69 @@ def _query_node(orders: OrderService | None) -> Callable[[AgentState], dict[str,
     return node
 
 
-def _clean_draft_title(text: str) -> str:
-    title = text
-    for hint in ("帮我建个工单", "帮我建个售后工单", "售后工单", "建个工单", "建单", "帮我", "麻烦"):
-        title = title.replace(hint, "")
-    title = re.sub(r"[，,。；;、！!？?：:\s]+", " ", title).strip()
-    return (title or "售后问题")[:40]
-
-
 def _service_node(state: AgentState) -> dict[str, Any]:
     question = state.get("question") or _last_human_text(state["messages"])
-    order_no = ORDER_NO_RE.search(question)
+    recognized = extract_service_slots(question)
+    intent_slots = state.get("slots", {})
+    order_no = recognized.get("order_no") or intent_slots.get("order_no", "")
+    contact = recognized.get("contact") or intent_slots.get("contact", "")
+    service_type = recognized.get("service_type") or intent_slots.get("service_type", "")
+    category = recognized.get("category") or intent_slots.get("category") or guess_category(question)
+    title = f"{service_type or '售后'}办理 · {order_no or '待补充订单号'}"
+    description = question
     draft = {
-        "status": "draft",
-        "title": _clean_draft_title(question),
-        "category": guess_category(question),
+        "status": "ready" if order_no and contact and service_type and len(description) >= 10 else "draft",
+        "title": title[:60],
+        "description": description,
+        "category": category,
         "priority": "中",
-        "order_no": order_no.group(0).upper() if order_no else "",
-        "contact": "",
+        "order_no": order_no,
+        "contact": contact,
+        "service_type": service_type,
+        "slots": {
+            key: value
+            for key, value in {
+                "order_no": order_no,
+                "contact": contact,
+                "service_type": service_type,
+                "category": category,
+            }.items()
+            if value
+        },
+        "requires_confirmation": True,
+    }
+    missing = []
+    if not service_type:
+        missing.append("service_type")
+    if not order_no:
+        missing.append("order_no")
+    if not contact:
+        missing.append("contact")
+    if len(description) < 10:
+        missing.append("description")
+    draft["missing"] = missing
+    draft["ready"] = not missing
+    draft["status"] = "ready" if draft["ready"] else "draft"
+
+    labels = {
+        "service_type": "业务类型",
+        "order_no": "订单号",
+        "contact": "联系人",
+        "description": "问题描述",
     }
     lines = [
-        "已整理售后工单草稿：",
+        "已整理业务办理草稿：",
+        f"- 业务类型：{service_type or '待补充'}",
+        f"- 订单号：{order_no or '待补充'}",
+        f"- 联系人：{contact or '待补充'}",
+        f"- 分类：{category}",
         f"- 标题：{draft['title']}",
-        f"- 分类：{draft['category']}",
         f"- 优先级：{draft['priority']}",
     ]
-    missing = []
-    if not draft["order_no"]:
-        missing.append("订单号")
-    if not draft["contact"]:
-        missing.append("联系人")
     if missing:
-        lines.append(f"还缺少：{'、'.join(missing)}，补充后我再帮你提交。")
+        lines.append(f"还缺少：{'、'.join(labels[item] for item in missing)}，请在右侧补齐后确认。")
     else:
-        lines.append("请确认后提交（演示版暂不直接创建工单）。")
+        lines.append("槽位已齐全，请在右侧核对并点击“确认提交”。")
     return {"messages": [AIMessage(content="\n".join(lines))], "draft": draft}
 
 

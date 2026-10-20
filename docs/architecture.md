@@ -60,7 +60,7 @@ flowchart TD
 | `route_by_intent` | 条件边：只允许 knowledge / query / service / fallback，未知意图走 fallback |
 | `knowledge` | 调用检索器并拼【参考资料】，再 `llm.invoke()` 生成带引用回答 |
 | `query` | 解析订单号/关键词，调用 `OrderService.get/search`，返回订单列表（不检索） |
-| `service` | 生成售后工单草稿、做槽位缺口检查；POC 不直接建单 |
+| `service` | 抽取业务类型/订单号/联系人等槽位，生成可编辑草稿；用户确认后才提交 |
 | `fallback` | 投诉/转人工/闲聊兜底话术；演示版无人工坐席 |
 
 当前 LangGraph 里**不再有 `agent` / `tools` 节点**：订单分支直接调用用例，工单工具仍保留在
@@ -119,15 +119,16 @@ main app
         ├── POST /branch/knowledge
         ├── POST /branch/query
         ├── POST /branch/service
+        ├── POST /branch/service/confirm
         └── POST /branch/fallback
 ```
 
 `app.py` 只挂载 dialogue 聚合 router；chat 与 branch 在聚合层平级挂载，避免让
-`/chat` 反向依赖 `/branch`。FastAPI 对外仍将五条路径扁平化为独立接口，因此 URL
+`/chat` 反向依赖 `/branch`。FastAPI 对外仍将六条对话路径扁平化为独立接口，因此 URL
 和行为不变。
 
 前端页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
-`?panel=orders`（本轮订单）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→
+`?panel=orders`（本轮订单）、`?panel=service`（业务办理）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→
 `components/`（可复用块）→ `hooks/`（状态）→ `api/`（网络），会话历史存 localStorage。
 
 电商业务入口另有两个独立页面：`#/orders`（订单查询，50 条演示订单）与 `#/kb`
@@ -148,14 +149,17 @@ main app
 | `start` | 收到请求 | `thread_id` / `provider` / `mock` |
 | `intent` | 意图识别完成 | `intent` / `confidence` / `reason` / `slots` |
 | `token` | 模型流式增量 | `text` |
+| `order` | 订单查询完成 | `orders[]` |
+| `service_draft` | 业务草稿生成 | 槽位、缺失项、ready、`requires_confirmation` |
 | `tool` | 工具被调用 / 返回 | `phase=call\|result`、`name`、`ok`、`message` |
 | `ticket` | 工具产出工单 | `tickets[]`（完整工单） |
 | `citation` | 本轮检索命中 | `index` / `source` / `title` / `snippet` / `score` |
 | `done` / `error` | 一轮结束 | —— |
 
 7. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
-8. 前端把 `order` / `citation` 渲染成气泡底部标签，并切换右侧对应结果面板；
-9. `ticket` 与 `tool` 事件名仍保留在契约中，但当前对话分支不会产生。
+8. 前端把 `order` / `citation` / `service_draft` 渲染成气泡底部标签，并切换右侧对应面板；
+9. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
+10. `ticket` 与 `tool` 事件名仍保留在契约中，但当前对话分支不会产生。
 
 ## 四个扩展点与生产替换
 
@@ -173,4 +177,4 @@ main app
 - **胶水层薄**：FastAPI 只做 HTTP/SSE 适配，编排全在 LangGraph，同一张图可以搬到 CLI、定时任务或消息网关。
 - **查询与写入分离**：检索只读知识库，工具只写工单存储，互不碰对方的数据结构。
 - **参考资料不进消息历史**：每轮临时拼进系统提示，多轮对话不会被旧资料撑爆上下文。
-- **事件名即契约**：SSE 事件名固定 7 类，前端按名字分发，加能力只加事件不加接口。
+- **事件名即契约**：前端按事件名分发；业务草稿通过新增 `service_draft` 扩展，不改变既有事件形状。

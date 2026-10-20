@@ -24,6 +24,11 @@ async def _get(path: str):
         return await client.get(path)
 
 
+async def _post_json(path: str, payload: dict):
+    async with _client() as client:
+        return await client.post(path, json=payload)
+
+
 async def _stream_post(
     path: str,
     message: str,
@@ -97,6 +102,7 @@ def test_openapi_mounts_chat_and_four_branch_routes() -> None:
     assert paths["/branch/knowledge"]["post"]
     assert paths["/branch/query"]["post"]
     assert paths["/branch/service"]["post"]
+    assert paths["/branch/service/confirm"]["post"]
     assert paths["/branch/fallback"]["post"]
     assert "/api/tickets" not in paths
 
@@ -218,6 +224,75 @@ def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
     assert intents and intents[-1]["intent"] == "query"
     text = "".join(payload["text"] for name, payload in events if name == "token")
     assert "SO" in text
+
+
+def test_service_chat_returns_editable_draft_without_writing(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    order_no = isolated_runtime.orders.search(limit=1)[0].order_no
+    events = asyncio.run(
+        _stream_chat(
+            f"订单 {order_no} 商品损坏，申请换货，联系电话 13800138000",
+            "api-service-draft",
+        )
+    )
+    drafts = [payload for name, payload in events if name == "service_draft"]
+    assert len(drafts) == 1
+    draft = drafts[0]
+    assert draft["ready"] is True
+    assert draft["order_no"] == order_no
+    assert draft["contact"] == "13800138000"
+    assert draft["service_type"] == "换货"
+    assert draft["requires_confirmation"] is True
+    assert "ticket" not in [name for name, _ in events]
+    assert isolated_runtime.tickets.count() == 0
+
+
+def test_service_confirmation_creates_ticket_only_after_explicit_submit(
+    isolated_runtime: AgentRuntime,
+) -> None:
+    _prepare(isolated_runtime)
+    order_no = isolated_runtime.orders.search(limit=1)[0].order_no
+    payload = {
+        "order_no": order_no,
+        "contact": "13800138000",
+        "service_type": "换货",
+        "category": "退换与售后",
+        "priority": "中",
+        "description": "收到的商品外壳损坏，申请换货处理。",
+    }
+
+    first = asyncio.run(_post_json("/branch/service/confirm", payload))
+    assert first.status_code == 200
+    body = first.json()
+    assert body["ok"] is True
+    assert body["duplicated"] is False
+    assert body["ticket_id"].startswith("TK-")
+    assert isolated_runtime.tickets.count() == 1
+
+    second = asyncio.run(_post_json("/branch/service/confirm", payload))
+    assert second.status_code == 200
+    assert second.json()["duplicated"] is True
+    assert second.json()["ticket_id"] == body["ticket_id"]
+    assert isolated_runtime.tickets.count() == 1
+
+
+def test_service_confirmation_rejects_unknown_order(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    response = asyncio.run(
+        _post_json(
+            "/branch/service/confirm",
+            {
+                "order_no": "SO197001019999",
+                "contact": "13800138000",
+                "service_type": "退款",
+                "category": "订单与支付",
+                "priority": "中",
+                "description": "订单不存在时的确认提交测试。",
+            },
+        )
+    )
+    assert response.status_code == 404
+    assert isolated_runtime.tickets.count() == 0
 
 
 @pytest.mark.parametrize(

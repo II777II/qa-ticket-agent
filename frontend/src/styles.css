@@ -458,6 +458,12 @@ button.cite {
   border-color: rgba(13, 143, 111, 0.25);
 }
 
+.cite-service {
+  color: #92610f;
+  background: #fdf4e5;
+  border-color: #f7e4c2;
+}
+
 .order-mini-card {
   display: flex;
   flex-direction: column;
@@ -563,6 +569,54 @@ button.cite {
 
 .panel-foot {
   padding: 0 14px 12px;
+}
+
+.service-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 14px 18px;
+}
+
+.slot-block {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.service-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.service-field > label {
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.service-field .ant-select {
+  width: 100%;
+}
+
+.service-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.service-result {
+  margin: 0;
+  line-height: 1.65;
 }
 
 .ticket-filters {

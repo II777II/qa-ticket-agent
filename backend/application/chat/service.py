@@ -23,6 +23,7 @@ from backend.application.chat.events import (
     EVENT_ERROR,
     EVENT_INTENT,
     EVENT_ORDER,
+    EVENT_SERVICE_DRAFT,
     EVENT_START,
     EVENT_TICKET,
     EVENT_TOKEN,
@@ -131,6 +132,9 @@ def _state_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
         orders = node_output.get("orders")
         if orders:
             yield EVENT_ORDER, {"orders": orders}
+        draft = node_output.get("draft")
+        if isinstance(draft, dict):
+            yield EVENT_SERVICE_DRAFT, draft
 
 
 class ChatService:

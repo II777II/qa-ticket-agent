@@ -36,6 +36,41 @@ export interface IntentEvent {
   slots: Record<string, string>;
 }
 
+export type ServiceType = "退货" | "换货" | "维修" | "退款" | "补发" | "价保" | "其他";
+
+/** service_draft 事件：右侧业务办理面板的完整草稿。 */
+export interface ServiceDraft {
+  status: "draft" | "ready";
+  title: string;
+  description: string;
+  category: string;
+  priority: string;
+  order_no: string;
+  contact: string;
+  service_type: ServiceType | "";
+  slots: Record<string, string>;
+  missing: string[];
+  ready: boolean;
+  requires_confirmation: boolean;
+}
+
+export interface ServiceConfirmPayload {
+  order_no: string;
+  contact: string;
+  service_type: ServiceType;
+  category: string;
+  priority: string;
+  description: string;
+}
+
+export interface ServiceConfirmResult {
+  ok: boolean;
+  ticket_id: string;
+  status: string;
+  duplicated: boolean;
+  message: string;
+}
+
 export interface TicketEvent {
   at: string;
   action: string;
@@ -92,6 +127,7 @@ export interface ChatMessage {
   orders: OrderSummary[];
   citations: CitationEvent[];
   intent?: IntentEvent;
+  serviceDraft?: ServiceDraft;
 }
 
 export interface StreamHandlers {
@@ -101,6 +137,7 @@ export interface StreamHandlers {
   onTicket?: (tickets: Ticket[]) => void;
   onOrder?: (orders: OrderSummary[]) => void;
   onIntent?: (event: IntentEvent) => void;
+  onServiceDraft?: (draft: ServiceDraft) => void;
   onCitation?: (event: CitationEvent) => void;
   onDone?: () => void;
   onError?: (event: ErrorEvent) => void;
@@ -158,7 +195,7 @@ export interface Conversation {
 }
 
 export type RoutePage = "home" | "chat" | "orders" | "kb" | "admin";
-export type ChatPanel = "none" | "knowledge" | "orders";
+export type ChatPanel = "none" | "knowledge" | "orders" | "service";
 
 /** ---------------- 电商订单 ---------------- */
 export interface OrderItem {
