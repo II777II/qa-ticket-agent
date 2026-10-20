@@ -166,6 +166,10 @@ SSE 响应由 FastAPI 内置的 `EventSourceResponse + ServerSentEvent` 编码�
 交给 FastAPI 路由层编码；`ServerSentEvent.data` 直接接收 JSON 可序列化对象，不再由项目
 手写 `event:/data:` 文本。
 
+`stream_events()` 在生成器内完成 payload JSON 序列化。上游异常或序列化失败会记录日志，
+并转成单个终止性 `error` 事件；`CancelledError` 属于 `BaseException`，客户端主动断开
+不会被误转而中止流。
+
 当前 `langgraph-native` 分支中，业务节点通过官方 `StreamWriter` 直接写入 custom 流：
 
 ```text

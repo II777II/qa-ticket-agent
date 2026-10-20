@@ -98,6 +98,9 @@ python -m uvicorn backend.api.app:app --port 5179
 `citation` / `done` / `error` 事件契约。业务草稿阶段只读；只有用户点击“确认提交”并
 调用 `/branch/service/confirm` 后才创建售后工单。
 
+SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并以单个终止性 `error`
+事件返回；客户端取消不会被误报为服务错误。
+
 ## 界面（5 个页面）
 
 浅色 Codex 风格，hash 路由（静态托管零配置）：
@@ -141,7 +144,7 @@ python -m uvicorn backend.api.app:app --port 5179
 ## 测试
 
 ```powershell
-python -m pytest            # 102 个用例，约 12 秒
+python -m pytest            # 104 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 
