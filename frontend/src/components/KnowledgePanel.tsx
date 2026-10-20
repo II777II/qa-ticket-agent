@@ -18,18 +18,18 @@ export default function KnowledgePanel({ question, hits, loading, onRefresh }: K
     <aside className="side-panel">
       <div className="panel-head">
         <span className="panel-title">知识库检索结果</span>
-        <Tag bordered={false}>{hits.length} 条</Tag>
+        <Tag bordered={false}>本轮 {hits.length} 条</Tag>
         <Button size="small" type="text" icon={<ReloadOutlined />} onClick={onRefresh} loading={loading}>
           重查
         </Button>
       </div>
       <div className="panel-query">
-        <Text type="secondary">查询</Text>
-        <div className="query-text">{question || "（还没有提问，先发一条消息）"}</div>
+        <Text type="secondary">本轮问题</Text>
+        <div className="query-text">{question || "（这一轮还没有提问）"}</div>
       </div>
 
       {hits.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "检索中…" : "这次没有命中知识库"} />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? "检索中…" : "本轮没有命中知识库"} />
       ) : (
         <div className="hit-list">
           {hits.map((hit) => (

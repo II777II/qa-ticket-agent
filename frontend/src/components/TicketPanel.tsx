@@ -15,15 +15,30 @@ const PRIORITY_CLASS: Record<string, string> = {
 };
 
 export interface TicketPanelProps {
+  /** 数据来源：turn=本轮问答产生/查询到的工单；all=显式查询全部 */
+  mode: "turn" | "all";
   tickets: Ticket[];
+  question: string;
   loading: boolean;
   selectedId: string | null;
   onSelect: (ticketId: string | null) => void;
-  onRefresh: () => void;
+  onLoadAll: () => void;
+  onReloadAll: () => void;
+  onExitAll: () => void;
 }
 
 /** 第 4 屏右侧：工单查询（关键字 + 状态过滤）+ 详情抽屉（时间线）。 */
-export default function TicketPanel({ tickets, loading, selectedId, onSelect, onRefresh }: TicketPanelProps) {
+export default function TicketPanel({
+  mode,
+  tickets,
+  question,
+  loading,
+  selectedId,
+  onSelect,
+  onLoadAll,
+  onReloadAll,
+  onExitAll,
+}: TicketPanelProps) {
   const [keyword, setKeyword] = useState("");
   const [status, setStatus] = useState<string>("全部");
   const [detail, setDetail] = useState<Ticket | null>(null);
@@ -63,10 +78,28 @@ export default function TicketPanel({ tickets, loading, selectedId, onSelect, on
       <div className="panel-head">
         <span className="panel-title">工单查询</span>
         <Badge count={tickets.length} showZero color="#0d8f6f" />
-        <Button size="small" type="text" icon={<ReloadOutlined />} onClick={onRefresh} loading={loading}>
-          刷新
-        </Button>
+        {mode === "turn" ? (
+          <Button size="small" type="text" onClick={onLoadAll}>
+            查询全部
+          </Button>
+        ) : (
+          <>
+            <Button size="small" type="text" icon={<ReloadOutlined />} onClick={onReloadAll} loading={loading}>
+              刷新
+            </Button>
+            <Button size="small" type="text" onClick={onExitAll}>
+              返回本轮
+            </Button>
+          </>
+        )}
       </div>
+
+      {mode === "turn" && (
+        <div className="panel-query">
+          <Text type="secondary">本轮问题</Text>
+          <div className="query-text">{question || "（这一轮还没有提问）"}</div>
+        </div>
+      )}
 
       <div className="ticket-filters">
         <Input
@@ -85,7 +118,10 @@ export default function TicketPanel({ tickets, loading, selectedId, onSelect, on
       </div>
 
       {filtered.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的工单" />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={mode === "turn" ? "本轮没有产生或查询到工单" : "没有匹配的工单"}
+        />
       ) : (
         <div className="ticket-list">
           {filtered.map((ticket) => (

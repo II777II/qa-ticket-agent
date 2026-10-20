@@ -23,9 +23,11 @@ function body(message: ChatMessage) {
 export interface MessageListProps {
   messages: ChatMessage[];
   onOpenTicket?: (ticketId: string) => void;
+  /** 把右侧面板切到「这一轮」的知识库/工单结果 */
+  onFocusTurn?: (messageKey: string, panel: "knowledge" | "tickets") => void;
 }
 
-export default function MessageList({ messages, onOpenTicket }: MessageListProps) {
+export default function MessageList({ messages, onOpenTicket, onFocusTurn }: MessageListProps) {
   const items = messages.map((message) => ({
     key: message.key,
     role: message.role,
@@ -37,9 +39,15 @@ export default function MessageList({ messages, onOpenTicket }: MessageListProps
         {message.citations.length > 0 && (
           <div className="cite-row">
             {message.citations.map((citation) => (
-              <span className="cite" key={`${citation.source}-${citation.title}`} title={citation.snippet}>
+              <button
+                type="button"
+                className="cite"
+                key={`${citation.source}-${citation.title}`}
+                title={citation.snippet}
+                onClick={() => onFocusTurn?.(message.key, "knowledge")}
+              >
                 [{citation.index}] {citation.source} · {citation.title}
-              </span>
+              </button>
             ))}
           </div>
         )}
@@ -50,7 +58,10 @@ export default function MessageList({ messages, onOpenTicket }: MessageListProps
                 key={ticket.id}
                 type="button"
                 className="cite cite-green"
-                onClick={() => onOpenTicket?.(ticket.id)}
+                onClick={() => {
+                  onFocusTurn?.(message.key, "tickets");
+                  onOpenTicket?.(ticket.id);
+                }}
               >
                 🎫 {ticket.id} · {ticket.status}
               </button>

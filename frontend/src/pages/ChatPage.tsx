@@ -18,7 +18,7 @@ export interface ChatPageProps {
   initialPanel: ChatPanel;
 }
 
-/** 第 2/3/4 屏：会话列表 + 对话，可按需在右侧挂知识库或工单面板。 */
+/** 第 2/3/4 屏：会话列表 + 对话；右侧面板跟随「某一轮问答」，而不是全局缓存。 */
 export default function ChatPage({ info, initialPanel }: ChatPageProps) {
   const { messages, busy, threadId, send, stop, reset, hydrate } = useChat();
   const { items, save, remove } = useConversations();
@@ -26,11 +26,13 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
   const [input, setInput] = useState("");
   const [panel, setPanel] = useState<ChatPanel>(initialPanel);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [hits, setHits] = useState<KnowledgeHit[]>([]);
-  const [hitsLoading, setHitsLoading] = useState(false);
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [focusedTurnKey, setFocusedTurnKey] = useState<string | null>(null);
+  const [allTickets, setAllTickets] = useState<Ticket[] | null>(null);
   const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [knowledgeOverride, setKnowledgeOverride] = useState<{ key: string; hits: KnowledgeHit[] } | null>(null);
+  const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+
   const pendingSent = useRef(false);
   const restored = useRef(false);
   const streamRef = useRef<HTMLDivElement>(null);
@@ -39,36 +41,65 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
     setPanel(initialPanel);
   }, [initialPanel]);
 
-  const refreshTickets = useCallback(async () => {
+  const lastAiKey = useMemo(() => {
+    const last = [...messages].reverse().find((message) => message.role === "ai");
+    return last?.key ?? null;
+  }, [messages]);
+
+  // 新的一轮开始：面板回到「本轮」，清掉上一轮的重查结果与「全部工单」模式
+  useEffect(() => {
+    setFocusedTurnKey(lastAiKey);
+    setAllTickets(null);
+    setKnowledgeOverride(null);
+    setSelectedTicketId(null);
+  }, [lastAiKey]);
+
+  const turn = useMemo(() => {
+    if (!focusedTurnKey) return null;
+    const index = messages.findIndex((message) => message.key === focusedTurnKey);
+    if (index < 0) return null;
+    const ai = messages[index];
+    const question =
+      [...messages.slice(0, index)].reverse().find((message) => message.role === "user")?.content ?? "";
+    return { ai, question };
+  }, [messages, focusedTurnKey]);
+
+  // 知识结果默认直接来自这一轮收到的 citation 事件；「重查」才走一次检索接口
+  const knowledgeHits: KnowledgeHit[] = (() => {
+    if (knowledgeOverride && turn && knowledgeOverride.key === turn.ai.key) {
+      return knowledgeOverride.hits;
+    }
+    return (turn?.ai.citations ?? []).map((citation) => ({
+      index: citation.index,
+      source: citation.source,
+      title: citation.title,
+      snippet: citation.snippet ?? "",
+      score: citation.score ?? null,
+    }));
+  })();
+
+  const refreshKnowledge = useCallback(async () => {
+    if (!turn?.question) return;
+    setKnowledgeLoading(true);
+    try {
+      setKnowledgeOverride({ key: turn.ai.key, hits: await searchKnowledge(turn.question, 5) });
+    } catch {
+      setKnowledgeOverride({ key: turn.ai.key, hits: [] });
+    } finally {
+      setKnowledgeLoading(false);
+    }
+  }, [turn]);
+
+  const loadAllTickets = useCallback(async () => {
     setTicketsLoading(true);
     try {
-      setTickets(await listTickets());
+      setAllTickets(await listTickets());
     } catch {
-      setTickets([]);
+      setAllTickets([]);
     } finally {
       setTicketsLoading(false);
     }
   }, []);
-
-  const lastQuestion = useMemo(() => {
-    const question = [...messages].reverse().find((message) => message.role === "user");
-    return question?.content ?? "";
-  }, [messages]);
-
-  const refreshHits = useCallback(async () => {
-    if (!lastQuestion) {
-      setHits([]);
-      return;
-    }
-    setHitsLoading(true);
-    try {
-      setHits(await searchKnowledge(lastQuestion, 5));
-    } catch {
-      setHits([]);
-    } finally {
-      setHitsLoading(false);
-    }
-  }, [lastQuestion]);
 
   // 首页带过来的问题：进入对话页后自动发一次
   useEffect(() => {
@@ -77,10 +108,10 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
     if (!pending) return;
     pendingSent.current = true;
     sessionStorage.removeItem(PENDING_QUESTION_KEY);
-    void send(pending, () => void refreshTickets());
-  }, [send, refreshTickets]);
+    void send(pending);
+  }, [send]);
 
-  // 首次进入（不是从首页带着问题跳过来）时，恢复最近一次会话，像常见对话产品一样
+  // 首次进入（不是从首页带问题跳过来）时，恢复最近一次会话
   useEffect(() => {
     if (restored.current) return;
     restored.current = true;
@@ -101,15 +132,7 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
     return () => window.clearTimeout(timer);
   }, [messages, threadId, save]);
 
-  useEffect(() => {
-    if (panel === "knowledge") void refreshHits();
-  }, [panel, refreshHits]);
-
-  useEffect(() => {
-    if (panel === "tickets" || messages.length > 0) void refreshTickets();
-  }, [panel, messages.length, refreshTickets]);
-
-  // 新消息 / 恢复会话后滚到底部（参考页的行为：看到最新一轮）
+  // 新消息 / 恢复会话后滚到底部
   useEffect(() => {
     const element = streamRef.current;
     if (element) element.scrollTop = element.scrollHeight;
@@ -117,13 +140,22 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
 
   const submit = (text: string) => {
     setInput("");
-    void send(text, () => void refreshTickets());
+    void send(text);
   };
 
   const openPanel = (next: Exclude<ChatPanel, "none">) => {
     const value: ChatPanel = panel === next ? "none" : next;
     setPanel(value);
     navigate(value === "none" ? "/chat" : `/chat?panel=${value}`);
+  };
+
+  /** 点击历史消息里的引用/工单标签：把右侧面板切到那一轮 */
+  const focusTurn = (messageKey: string, target: "knowledge" | "tickets") => {
+    setFocusedTurnKey(messageKey);
+    setAllTickets(null);
+    setKnowledgeOverride(null);
+    setPanel(target);
+    navigate(`/chat?panel=${target}`);
   };
 
   const selectConversation = (conversation: Conversation) => {
@@ -136,7 +168,9 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
     reset();
     setActiveId(null);
     setSelectedTicketId(null);
-    setHits([]);
+    setFocusedTurnKey(null);
+    setAllTickets(null);
+    setKnowledgeOverride(null);
   };
 
   const title = items.find((item) => item.id === activeId)?.title ?? (messages.length ? "会话进行中" : "新对话");
@@ -191,7 +225,11 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
                   </div>
                 </div>
               ) : (
-                <MessageList messages={messages} onOpenTicket={(ticketId) => setSelectedTicketId(ticketId)} />
+                <MessageList
+                  messages={messages}
+                  onFocusTurn={focusTurn}
+                  onOpenTicket={(ticketId) => setSelectedTicketId(ticketId)}
+                />
               )}
             </div>
             <div className="composer-wrap">
@@ -208,15 +246,24 @@ export default function ChatPage({ info, initialPanel }: ChatPageProps) {
           </section>
 
           {panel === "knowledge" && (
-            <KnowledgePanel question={lastQuestion} hits={hits} loading={hitsLoading} onRefresh={() => void refreshHits()} />
+            <KnowledgePanel
+              question={turn?.question ?? ""}
+              hits={knowledgeHits}
+              loading={knowledgeLoading}
+              onRefresh={() => void refreshKnowledge()}
+            />
           )}
           {panel === "tickets" && (
             <TicketPanel
-              tickets={tickets}
+              mode={allTickets ? "all" : "turn"}
+              tickets={allTickets ?? turn?.ai.tickets ?? []}
+              question={turn?.question ?? ""}
               loading={ticketsLoading}
               selectedId={selectedTicketId}
               onSelect={setSelectedTicketId}
-              onRefresh={() => void refreshTickets()}
+              onLoadAll={() => void loadAllTickets()}
+              onReloadAll={() => void loadAllTickets()}
+              onExitAll={() => setAllTickets(null)}
             />
           )}
         </div>
