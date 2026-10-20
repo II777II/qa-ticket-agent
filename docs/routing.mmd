@@ -1,0 +1,19 @@
+flowchart TD
+    U["用户输入"] --> P["preprocess<br/>清洗 / 截断"]
+    P --> C["classify<br/>LLM 意图识别 + 规则兜底"]
+    C -- knowledge --> K1["RAG 检索"]
+    K1 --> K2["生成回答<br/>SSE: citation + token"]
+    C -- query --> Q1["解析订单号 / 姓名 / 关键词"]
+    Q1 --> Q2["OrderService 查询<br/>SSE: order + token"]
+    C -- service --> S1["抽取槽位"]
+    S1 --> S2{"缺订单号 / 联系人?"}
+    S2 -- 是 --> S3["追问缺失槽位"]
+    S2 -- 否 --> S4["生成工单草稿<br/>待用户确认（演示版不建单）"]
+    C -- fallback --> F1["投诉 / 转人工 / 闲聊兜底"]
+    K2 --> E(["结束"])
+    Q2 --> E
+    S3 --> E
+    S4 --> E
+    F1 --> E
+    classDef decision fill:#fff7e6,stroke:#d4a017
+    class S2 decision
