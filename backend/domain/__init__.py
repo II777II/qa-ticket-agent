@@ -10,8 +10,6 @@
 
 from backend.domain.models import TicketCreate, TicketRecord
 from backend.domain.rules import (
-    TICKET_CATEGORIES,
-    TICKET_PRIORITIES,
     TicketCategory,
     TicketPriority,
     duplicate_of,
@@ -21,8 +19,6 @@ from backend.domain.rules import (
 __all__ = [
     "TicketCreate",
     "TicketRecord",
-    "TICKET_CATEGORIES",
-    "TICKET_PRIORITIES",
     "TicketCategory",
     "TicketPriority",
     "duplicate_of",

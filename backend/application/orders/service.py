@@ -48,7 +48,12 @@ def order_summary(order: OrderRecord) -> dict:
         "refund_amount": order.refund_amount,
         "created_at": order.created_at,
         "items": [
-            {"name": item.product_name, "spec": item.sku_spec, "quantity": item.quantity, "price": item.price}
+            {
+                "name": item.get("product_name", ""),
+                "spec": item.get("sku_spec"),
+                "quantity": item.get("quantity", 0),
+                "price": item.get("price", 0),
+            }
             for item in order.items
         ],
     }

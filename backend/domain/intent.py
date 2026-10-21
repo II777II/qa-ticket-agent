@@ -1,12 +1,6 @@
 """对话意图的规则识别。
 
-POC 先用关键词/订单号规则，保证演示模式（无模型 Key）也能路由；
-将来换 LLM 结构化分类器时，只要保持 `detect_intent()` 的返回值不变。
-
-返回值：
-    order_lookup  查订单（走 query_order，跳过 RAG）
-    after_sales   售后处理（可建售后工单）
-    knowledge     帮助中心问答（走 RAG）
+POC 用关键词和订单号规则，保证 mock 模式也能完成五路路由。
 """
 
 from __future__ import annotations
@@ -109,12 +103,6 @@ def extract_service_slots(text: str) -> dict[str, str]:
 
     slots["category"] = guess_category(text)
     return slots
-
-
-def detect_intent(text: str) -> str:
-    """兼容旧接口：order_lookup / after_sales / knowledge。"""
-    result = rule_classify(text)
-    return {"query": "order_lookup", "service": "after_sales"}.get(result.intent, result.intent)
 
 
 def rule_classify(text: str) -> IntentResult:

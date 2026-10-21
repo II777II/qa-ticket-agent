@@ -114,7 +114,7 @@ class JsonOrderStore:
                         order.order_no,
                         str(order.user_id),
                         *(str(value) for value in (order.user or {}).values()),
-                        *(item.product_name for item in order.items),
+                        *(str(item.get("product_name", "")) for item in order.items),
                     ]
                 ).lower()
                 if key not in text:

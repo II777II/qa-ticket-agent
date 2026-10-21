@@ -37,7 +37,7 @@ def test_search_by_keyword_matches_order_no_or_product() -> None:
     by_no = store.search(q=first.order_no[-6:], limit=10)
     assert any(order.order_no == first.order_no for order in by_no)
 
-    product = first.items[0].product_name[:4]
+    product = first.items[0]["product_name"][:4]
     assert store.search(q=product, limit=50)
 
 

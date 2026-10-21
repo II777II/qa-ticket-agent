@@ -1,13 +1,9 @@
-"""工单业务规则：枚举、状态校验、重复判定、按天单号。
-
-规则集中在这里之后，「改一个业务口径只改一处」才成立——此前这三类规则散在
-schemas.py（枚举）、stores/json_store.py（去重与状态校验）、tools.py（建单流程）三处。
-"""
+"""工单业务规则：分类、优先级、重复判定和按天单号。"""
 
 from __future__ import annotations
 
 from datetime import date
-from typing import TYPE_CHECKING, Iterable, Literal, Sequence, get_args
+from typing import TYPE_CHECKING, Iterable, Literal, Sequence
 
 if TYPE_CHECKING:  # 只用于类型标注，避免与 models.py 形成运行时循环导入
     from backend.domain.models import TicketCreate, TicketRecord
@@ -22,10 +18,6 @@ TicketCategory = Literal[
     "其他",
 ]
 TicketPriority = Literal["紧急", "高", "中", "低"]
-
-TICKET_CATEGORIES: tuple[str, ...] = get_args(TicketCategory)
-TICKET_PRIORITIES: tuple[str, ...] = get_args(TicketPriority)
-
 
 def next_ticket_id(existing_ids: Iterable[str], today: date | None = None) -> str:
     """按天递增的单号：`TK-YYYYMMDD-0001`。"""

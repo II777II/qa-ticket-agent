@@ -19,7 +19,7 @@ from langchain_core.messages import (
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from pydantic import Field
 
-from backend.domain.intent import ORDER_NO_RE, detect_intent, extract_order_keyword
+from backend.domain.intent import ORDER_NO_RE, extract_order_keyword, rule_classify
 from backend.infrastructure.retrieval.in_memory import CONTEXT_FOOTER, CONTEXT_HEADER
 
 TEMPLATE = """【演示模式】当前没有模型 API Key，这是一段链路占位回答。
@@ -157,7 +157,7 @@ class FakeChatModel(BaseChatModel):
         question = _last_human(messages)
         if "query_order" not in names or not question or _called_tool(messages):
             return None
-        if detect_intent(question) not in {"order_lookup", "logistics"}:
+        if rule_classify(question).intent not in {"query", "logistics"}:
             return None
         order_no = ORDER_NO_RE.search(question)
         args = (
