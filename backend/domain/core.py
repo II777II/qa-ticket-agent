@@ -50,7 +50,8 @@ class IntentResult(BaseModel):
 def extract_order_keyword(text: str) -> str:
     cleaned = text
     for hint in (
-        "帮我查询", "帮我查一下", "帮忙查询", "帮我查", "查询一下", "查询", "查一下", "查下", "查",
+        "帮我查询", "帮我查一下", "帮忙查询", "帮我查", "帮我查看", "查看一下", "查看",
+        "看一下", "看下", "查询一下", "查询", "查一下", "查下", "查",
         "我的订单", "订单进度", "订单状态", "订单到哪了", "订单", "一下", "请问",
     ):
         cleaned = cleaned.replace(hint, "")

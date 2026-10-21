@@ -5,7 +5,8 @@ from __future__ import annotations
 from datetime import date
 
 from backend.domain.core import (
-    TicketCreate, TicketRecord, duplicate_of, is_order_query, next_ticket_id, rule_classify,
+    TicketCreate, TicketRecord, duplicate_of, extract_order_keyword, is_order_query,
+    next_ticket_id, rule_classify,
 )
 
 TODAY = date(2026, 10, 16)
@@ -70,3 +71,4 @@ def test_three_way_rule_classifier() -> None:
 def test_read_tool_rules_distinguish_order_and_knowledge() -> None:
     assert is_order_query("帮我查询张三的订单")
     assert not is_order_query("退货退款和发票怎么处理")
+    assert extract_order_keyword("查看张三订单") == "张三"

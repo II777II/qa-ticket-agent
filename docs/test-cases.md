@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（83 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
+- **自动化用例**（85 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 83 passed in ~3s
+python -m pytest              # 85 passed in ~3s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -55,6 +55,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | G-09 | 会话隔离 | 两个 thread_id 各问一轮 | 各自消息累积，互不串味 |
 | G-10 | LangGraph custom 事件 | 直接订阅 `stream_mode="custom"` 执行维修分支 | 收到且只收到一条 `service_draft`，事件载荷含维修槽位 |
 | G-12 | 共享事件契约 | 从 `application/core.py` 导入 EVENT_* | Agent、Chat、API 与 CLI 使用同一组常量 |
+| G-13 | 订单姓名关键词抽取 | 输入「查看张三订单」 | 工具查询词为「张三」，返回张三订单 |
 
 ## 四、接口（`test_api.py`）
 
