@@ -337,7 +337,8 @@ def format_context(documents: Sequence[Document]) -> str:
     return "\n".join(lines)
 
 
-def message_text(content: Any) -> str:
+def message_text(value: Any) -> str:
+    content = getattr(value, "content", value)
     if isinstance(content, str):
         return content
     if isinstance(content, list):

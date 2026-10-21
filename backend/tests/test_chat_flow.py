@@ -81,3 +81,10 @@ def test_order_query_uses_deterministic_tool_without_rag(isolated_runtime: Agent
     assert result["orders"]
     assert result["citations"] == []
     assert "SO" in result["text"]
+
+
+def test_missing_order_returns_plain_text(isolated_runtime: AgentRuntime) -> None:
+    """确定性订单工具没命中时，也应只输出文本，不能泄露 AIMessage 对象表示。"""
+    result = _turn(isolated_runtime, "查询订单 SO197001019999", "flow-order-missing")
+    assert result["text"] == "没有找到订单，请提供 SO 开头的订单号、姓名或手机号。"
+    assert "additional_kwargs" not in result["text"]
