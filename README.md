@@ -215,7 +215,7 @@ python -m backend.scripts.generate_ecommerce_demo
 ```
 backend/
   domain/core.py       领域模型、意图规则、槽位、订单摘要与工单规则
-  application/         agent.py（三路图与工具）、chat.py（对话用例）、runtime.py（运行装配）
+  application/         graph.py（三路图与工具）、chat.py（对话用例）、runtime.py（运行装配）
   infrastructure/      config.py、storage.py、retrieval.py、llm.py、observability.py
   api/                 app.py（FastAPI 组装）、routes.py（HTTP/SSE）、schemas.py（请求模型）
   scripts/cli_chat.py  命令行验收

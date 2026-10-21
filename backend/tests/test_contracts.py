@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.application.agent import EVENT_ERROR, EVENT_SERVICE_DRAFT, EVENT_START
+from backend.application.graph import EVENT_ERROR, EVENT_SERVICE_DRAFT, EVENT_START
 
 
 def test_chat_events_live_in_shared_contract_package() -> None:

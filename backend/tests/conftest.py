@@ -27,7 +27,7 @@ os.environ["TICKET_STORE"] = "json"
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="qa-ticket-test-")
 os.environ["LANGFUSE_ENABLED"] = "false"
 
-from backend.application.agent import build_graph  # noqa: E402
+from backend.application.graph import build_graph  # noqa: E402
 from backend.application.runtime import AgentRuntime, create_runtime  # noqa: E402
 from backend.domain.core import TicketCreate  # noqa: E402
 from backend.infrastructure.config import settings  # noqa: E402

@@ -82,7 +82,7 @@ read、write、human 三类都是明确、可测试的执行路径；read 内部
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `core.py` 集中请求模型、全部路由、SSE、FastAPI 与静态托管；`app.py` 是 ASGI 入口 | 不改 |
-| 应用层 | `backend/application/` | `agent.py` 三路编排与工具，`chat.py` 对话用例，`runtime.py` 运行装配 | 按职责修改对应文件 |
+| 应用层 | `backend/application/` | `graph.py` 三路编排与工具，`chat.py` 对话用例，`runtime.py` 运行装配 | 按职责修改对应文件 |
 | 领域层 | `backend/domain/core.py` | 实体、意图/槽位、订单摘要、分类/优先级/去重/单号规则 | 不改 |
 | 基础设施层 | `backend/infrastructure/` | 配置、仓储、检索、模型、指标与 Langfuse 分文件维护 | 按适配器扩展 |
 
@@ -173,7 +173,7 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 便于对比两种写法。
 
 `EVENT_*` 属于跨 Agent、Chat、API 与 CLI 的共享契约，统一放在
-`application/agent.py`。Chat、Agent 与 API 直接引用同一组常量，不再维护包门面。
+`application/graph.py`。Chat、Agent 与 API 直接引用同一组常量，不再维护包门面。
 
 ## 四个扩展点与生产替换
 

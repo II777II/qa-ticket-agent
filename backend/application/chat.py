@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
-from backend.application.agent import (
+from backend.application.graph import (
     EVENT_DONE, EVENT_ERROR, EVENT_INTENT, EVENT_START, EVENT_TOKEN,
 )
 from backend.domain.core import IntentName

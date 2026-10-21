@@ -15,7 +15,7 @@ import argparse
 import asyncio
 import sys
 
-from backend.application.agent import (
+from backend.application.graph import (
     EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,

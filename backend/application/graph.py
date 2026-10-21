@@ -1,4 +1,4 @@
-"""LangGraph state, intent classification, route nodes and deterministic tools."""
+"""LangGraph state, routing nodes and deterministic tools."""
 
 from __future__ import annotations
 

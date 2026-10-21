@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from backend.application.agent import build_graph
+from backend.application.graph import build_graph
 from backend.domain.core import is_order_query, rule_classify
 from backend.infrastructure.config import EVAL_CASES_FILE, LLM_MODELS, settings
 from backend.infrastructure.llm import create_checkpointer, create_llm
