@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, SecretStr
 
 from backend.application.core import AgentRuntime, ChatService, create_runtime
-from backend.domain.core import ServiceType, TicketCategory, TicketCreate, TicketPriority
+from backend.domain.core import ORDER_NO_RE, ServiceType, TicketCategory, TicketCreate, TicketPriority
 from backend.infrastructure.core import LLM_MODELS, create_llm, git_version, settings, setup_logging
 
 logger = logging.getLogger("qa_ticket.api")
@@ -122,9 +122,17 @@ async def configure_llm(req: LlmConfigRequest, runtime: AgentRuntime = Depends(g
 
 
 @router.get("/api/orders", tags=["orders"])
-async def orders(q: str = "", status: int | None = None, user_id: int | None = None,
+async def orders(order_no: str = "", user_id: int | None = None,
                  limit: int = 20, runtime: AgentRuntime = Depends(get_runtime)):
-    return runtime.orders.search(q=q, status=status, user_id=user_id, limit=limit)
+    order_no = order_no.strip().upper()
+    if order_no:
+        if not ORDER_NO_RE.fullmatch(order_no):
+            raise HTTPException(status_code=400, detail="订单号格式应为 SO + 12 位数字")
+        record = runtime.orders.get(order_no)
+        return [record] if record else []
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="必须提供 user_id 或 order_no")
+    return runtime.orders.search(user_id=user_id, limit=limit)
 
 
 @router.get("/api/kb/categories", tags=["knowledge"])
@@ -153,6 +161,11 @@ async def kb_search(q: str, top_k: int = 5, runtime: AgentRuntime = Depends(get_
 @router.get("/api/metrics/summary", tags=["metrics"])
 async def metrics(days: int = 7, runtime: AgentRuntime = Depends(get_runtime)):
     return runtime.metrics.summary(days=days)
+
+
+@router.get("/api/evaluation/summary", tags=["metrics"])
+async def evaluation(runtime: AgentRuntime = Depends(get_runtime)):
+    return runtime.evaluate()
 
 
 @router.get("/", tags=["system"])

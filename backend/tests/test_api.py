@@ -172,6 +172,17 @@ def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
     assert summary["by_intent"][0]["intent"] == "read"
 
 
+def test_evaluation_summary_uses_fixed_cases(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    body = asyncio.run(_get("/api/evaluation/summary")).json()
+    assert body["classifier"] == "rules"
+    assert body["total"] == 40
+    assert len(body["rows"]) == 40
+    assert body["intent_accuracy"] >= 80
+    assert body["tool_accuracy"] >= 90
+    assert body["rag_hit_rate"] >= 75
+
+
 def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
     """咨询类问题的事件序列：start → token… → citation… → done，且不建单。"""
     _prepare(isolated_runtime)
@@ -233,13 +244,15 @@ def test_chat_rejects_empty_message(isolated_runtime: AgentRuntime) -> None:
 
 def test_orders_api(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
-    listing = asyncio.run(_get("/api/orders?limit=5")).json()
-    assert len(listing) == 5
+    assert asyncio.run(_get("/api/orders")).status_code == 400
+    listing = asyncio.run(_get("/api/orders?user_id=10002&limit=2")).json()
+    assert len(listing) == 2
     order_no = listing[0]["order_no"]
     assert order_no.startswith("SO")
     assert listing[0]["status_label"]
-
     assert listing[0]["items"]
+    exact = asyncio.run(_get(f"/api/orders?order_no={order_no}")).json()
+    assert [order["order_no"] for order in exact] == [order_no]
 
 
 def test_kb_article_catalog(isolated_runtime: AgentRuntime) -> None:
@@ -255,7 +268,7 @@ def test_kb_article_catalog(isolated_runtime: AgentRuntime) -> None:
 
 def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
-    events = asyncio.run(_stream_chat("帮我查询张三的订单", "api-order"))
+    events = asyncio.run(_stream_chat("查询用户 10002 的订单", "api-order"))
     names = [name for name, _ in events]
     assert "citation" not in names
     assert "order" in names
@@ -267,7 +280,7 @@ def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
 
 def test_service_chat_returns_editable_draft_without_writing(isolated_runtime: AgentRuntime) -> None:
     _prepare(isolated_runtime)
-    order_no = isolated_runtime.orders.search(limit=1)[0].order_no
+    order_no = isolated_runtime.orders.get("SO202609150020").order_no
     events = asyncio.run(
         _stream_chat(
             f"订单 {order_no} 商品损坏，申请换货，联系电话 13800138000",
@@ -289,7 +302,7 @@ def test_service_confirmation_creates_ticket_only_after_explicit_submit(
     isolated_runtime: AgentRuntime,
 ) -> None:
     _prepare(isolated_runtime)
-    order_no = isolated_runtime.orders.search(limit=1)[0].order_no
+    order_no = isolated_runtime.orders.get("SO202609150020").order_no
     payload = {
         "order_no": order_no,
         "contact": "13800138000",

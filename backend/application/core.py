@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from dataclasses import dataclass
@@ -14,11 +15,11 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.types import StreamWriter
 
 from backend.domain.core import (
-    HUMAN_HINTS, ORDER_NO_RE, IntentName, IntentResult, extract_order_keyword,
-    extract_service_slots, guess_category, is_order_query, rule_classify,
+    HUMAN_HINTS, ORDER_NO_RE, IntentName, IntentResult, extract_service_slots,
+    extract_user_id, guess_category, is_order_query, rule_classify,
 )
 from backend.infrastructure.core import (
-    LLM_MODELS, LangfuseTracing, MetricsCollector, create_checkpointer, create_knowledge_catalog,
+    EVAL_CASES_FILE, LLM_MODELS, LangfuseTracing, MetricsCollector, create_checkpointer, create_knowledge_catalog,
     create_langfuse_tracing, create_llm, create_order_store, create_retriever,
     create_ticket_store, estimate_tokens, format_context, message_text, settings,
 )
@@ -69,10 +70,12 @@ def _preprocess(state: AgentState) -> dict[str, Any]:
 def _classify(llm: BaseChatModel) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
     def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
         requested = state.get("requested_intent")
-        result = (
-            IntentResult(intent=requested, confidence=1.0, reason="由显式 HTTP 分支路由指定")
-            if requested in INTENTS else _intent(state["question"], llm)
-        )
+        if requested in INTENTS:
+            result = IntentResult(intent=requested, confidence=1.0, reason="由显式 HTTP 分支路由指定")
+        elif is_order_query(state["question"]):
+            result = rule_classify(state["question"])
+        else:
+            result = _intent(state["question"], llm)
         _emit(writer, EVENT_INTENT, {
             "intent": result.intent, "confidence": result.confidence,
             "reason": result.reason, "slots": result.slots,
@@ -112,10 +115,12 @@ def _order_tool(orders: Any | None) -> Callable[[AgentState, StreamWriter], dict
         elif match := ORDER_NO_RE.search(question):
             record = orders.get(match.group(0))
             results = [record] if record else []
+        elif user_id := extract_user_id(question):
+            results = orders.search(user_id=user_id, limit=20)
         else:
-            results = orders.search(q=extract_order_keyword(question), limit=5)
+            results = []
         if not results:
-            return {"messages": [AIMessage(content="没有找到订单，请提供 SO 开头的订单号、姓名或手机号。")], "orders": []}
+            return {"messages": [AIMessage(content="没有找到订单，请提供 SO 开头的订单号或 user_id。")], "orders": []}
         summaries = [x.summary() for x in results]
         _emit(writer, EVENT_ORDER, {"orders": summaries})
         lines = [
@@ -285,6 +290,30 @@ class AgentRuntime:
         self.graph = build_graph(
             llm=llm, retriever=self.retriever, checkpointer=self.checkpointer, order_service=self.orders,
         )
+
+    def evaluate(self) -> dict[str, Any]:
+        cases = json.loads(EVAL_CASES_FILE.read_text(encoding="utf-8"))
+        rows = []
+        for case in cases:
+            question, expected = case["query"], case["expected_intent"]
+            actual = rule_classify(question).intent
+            tool = ("order_query" if is_order_query(question) else "knowledge_search") if actual == "read" else None
+            source = case.get("expected_source")
+            docs = self.retriever.search(question, top_k=3) if source and self.retriever else []
+            sources = [doc.metadata.get("source", "") for doc in docs]
+            rows.append({**case, "actual_intent": actual, "actual_tool": tool, "retrieved_sources": sources,
+                         "intent_ok": actual == expected, "tool_ok": tool == case.get("expected_tool") if case.get("expected_tool") else None,
+                         "rag_hit": source in sources if source else None})
+        rate = lambda values: round(sum(values) / len(values) * 100, 1) if values else 100.0
+        return {
+            "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "classifier": "rules",
+            "total": len(rows),
+            "intent_accuracy": rate([row["intent_ok"] for row in rows]),
+            "tool_accuracy": rate([row["tool_ok"] for row in rows if row["tool_ok"] is not None]),
+            "rag_hit_rate": rate([row["rag_hit"] for row in rows if row["rag_hit"] is not None]),
+            "rows": rows,
+        }
 
 
 def create_runtime() -> AgentRuntime:

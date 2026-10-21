@@ -7,6 +7,7 @@
 
 import type {
   AgentInfo,
+  EvaluationSummary,
   KnowledgeArticle,
   KnowledgeCategory,
   KnowledgeHit,
@@ -63,10 +64,13 @@ export function getMetrics(days = 7): Promise<MetricsSummary> {
   return requestJson<MetricsSummary>(`/api/metrics/summary?days=${days}`);
 }
 
-export function listOrders(params: { q?: string; status?: number; user_id?: number; limit?: number }): Promise<OrderRecord[]> {
+export function getEvaluation(): Promise<EvaluationSummary> {
+  return requestJson<EvaluationSummary>("/api/evaluation/summary");
+}
+
+export function listOrders(params: { order_no?: string; user_id?: number; limit?: number }): Promise<OrderRecord[]> {
   const search = new URLSearchParams();
-  if (params.q) search.set("q", params.q);
-  if (params.status !== undefined) search.set("status", String(params.status));
+  if (params.order_no) search.set("order_no", params.order_no);
   if (params.user_id !== undefined) search.set("user_id", String(params.user_id));
   search.set("limit", String(params.limit ?? 20));
   return requestJson<OrderRecord[]>(`/api/orders?${search.toString()}`);

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { SearchOutlined } from "@ant-design/icons";
-import { Button, Empty, Input, Select, Spin, Tag, Timeline, Typography } from "antd";
+import { Button, Empty, Input, Spin, Tag, Timeline, Typography } from "antd";
 
 import { listOrders } from "../api/agent";
 import SiteSidebar from "../components/SiteSidebar";
@@ -8,37 +8,38 @@ import type { AgentInfo, OrderRecord } from "../types";
 
 const { Text } = Typography;
 
-const STATUS_OPTIONS = [
-  { value: "all", label: "全部状态" },
-  { value: "0", label: "待支付" },
-  { value: "10", label: "已支付" },
-  { value: "20", label: "待发货" },
-  { value: "30", label: "已发货" },
-  { value: "40", label: "已完成" },
-  { value: "50", label: "已取消" },
-  { value: "60", label: "退款中" },
-  { value: "70", label: "已退款" },
-];
-
 function money(value: number): string {
   return `¥${value.toFixed(2)}`;
 }
 
 /** 电商订单查询页：条件检索 + 订单详情（明细/金额/支付/退款/状态时间线）。 */
 export default function OrdersPage({ info }: { info: AgentInfo | null }) {
-  const [keyword, setKeyword] = useState("");
-  const [status, setStatus] = useState("all");
+  const [orderNo, setOrderNo] = useState("");
+  const [userId, setUserId] = useState("");
+  const [validation, setValidation] = useState("");
   const [orders, setOrders] = useState<OrderRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedNo, setSelectedNo] = useState<string | null>(null);
 
   const search = useCallback(async () => {
+    if (!orderNo.trim() && !userId.trim()) {
+      setValidation("请输入订单号或 user_id");
+      setOrders([]);
+      return;
+    }
+    if (userId.trim() && !/^\d+$/.test(userId.trim())) {
+      setValidation("user_id 必须是数字");
+      setOrders([]);
+      return;
+    }
+    setValidation("");
     setLoading(true);
+    setSelectedNo(null);
     try {
       setOrders(
         await listOrders({
-          q: keyword.trim(),
-          status: status === "all" ? undefined : Number(status),
+          order_no: orderNo.trim() || undefined,
+          user_id: userId.trim() ? Number(userId.trim()) : undefined,
           limit: 50,
         }),
       );
@@ -47,11 +48,7 @@ export default function OrdersPage({ info }: { info: AgentInfo | null }) {
     } finally {
       setLoading(false);
     }
-  }, [keyword, status]);
-
-  useEffect(() => {
-    void search();
-  }, [search]);
+  }, [orderNo, userId]);
 
   const selected = useMemo(
     () => orders.find((order) => order.order_no === selectedNo) ?? null,
@@ -75,12 +72,18 @@ export default function OrdersPage({ info }: { info: AgentInfo | null }) {
               <Input
                 allowClear
                 prefix={<SearchOutlined />}
-                placeholder="订单号 / 用户 / 商品关键词"
-                value={keyword}
-                onChange={(event) => setKeyword(event.target.value)}
+                placeholder="订单号 SO..."
+                value={orderNo}
+                onChange={(event) => setOrderNo(event.target.value.toUpperCase())}
                 onPressEnter={() => void search()}
               />
-              <Select value={status} onChange={setStatus} options={STATUS_OPTIONS} style={{ width: 130 }} />
+              <Input
+                allowClear
+                placeholder="user_id，例如 10018"
+                value={userId}
+                onChange={(event) => setUserId(event.target.value)}
+                onPressEnter={() => void search()}
+              />
               <Button type="primary" onClick={() => void search()} loading={loading}>
                 查询
               </Button>
@@ -90,7 +93,7 @@ export default function OrdersPage({ info }: { info: AgentInfo | null }) {
               {loading && orders.length === 0 ? (
                 <Spin />
               ) : orders.length === 0 ? (
-                <Empty description="没有匹配的订单" />
+                <Empty description={validation || "没有匹配的订单"} />
               ) : (
                 orders.map((order) => (
                   <button

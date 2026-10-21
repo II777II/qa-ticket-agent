@@ -9,6 +9,7 @@ from typing import Iterable, Literal, Sequence
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 ORDER_NO_RE = re.compile(r"SO\d{12}", re.I)
+USER_ID_RE = re.compile(r"(?:user[_\s-]?id|用户\s*(?:id|编号)?)\s*[:：=]?\s*(\d{3,})", re.I)
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
 IntentName = Literal["read", "write", "human"]
@@ -18,14 +19,8 @@ TicketCategory = Literal[
     "商品与质量", "账户与安全", "其他",
 ]
 TicketPriority = Literal["紧急", "高", "中", "低"]
-ORDER_LOOKUP_HINTS = (
-    "我的订单", "查订单", "查询订单", "订单查询", "订单进度", "订单状态",
-    "订单到哪", "查一下订单", "订单号", "订单怎么样",
-)
-ORDER_LOOKUP_VERBS = ("查询", "查一下", "查下", "查", "查看", "看下", "进度", "状态", "到哪", "我的", "我要", "给我")
-KNOWLEDGE_EXCLUSIONS = ("退款", "退货", "发票", "物流", "发货", "规则", "流程", "怎么开", "如何开")
 CREATE_HINTS = ("建单", "建个工单", "创建工单", "提交工单", "售后工单", "帮我建", "帮我提")
-WRITE_HINTS = ("申请退货", "申请换货", "申请维修", "申请退款", "办理退货", "办理换货", "办理维修", "帮我退", "帮我换", "帮我维修", "我要退", "我要换", "我要维修", "需要维修", "需要换货")
+WRITE_HINTS = ("申请退货", "申请换货", "申请维修", "申请退款", "申请补发", "申请价保", "办理退货", "办理换货", "办理维修", "帮我退", "帮我换", "帮我维修", "我要退", "我要换", "我要维修", "需要维修", "需要换货")
 HUMAN_HINTS = ("投诉", "差评", "转人工", "人工客服", "找人工", "客服电话")
 CHAT_HINTS = ("在吗", "你好", "您好", "嗨", "谢谢", "闲聊")
 SERVICE_TYPE_RULES: tuple[tuple[ServiceType, tuple[str, ...]], ...] = (
@@ -45,17 +40,6 @@ class IntentResult(BaseModel):
     confidence: float = Field(default=0.5, ge=0, le=1)
     reason: str = ""
     slots: dict[str, str] = Field(default_factory=dict)
-
-
-def extract_order_keyword(text: str) -> str:
-    cleaned = text
-    for hint in (
-        "帮我查询", "帮我查一下", "帮忙查询", "帮我查", "帮我查看", "查看一下", "查看",
-        "看一下", "看下", "查询一下", "查询", "查一下", "查下", "查", "我要", "给我",
-        "我的订单", "订单进度", "订单状态", "订单到哪了", "订单", "一下", "请问",
-    ):
-        cleaned = cleaned.replace(hint, "")
-    return (re.sub(r"[，,。；;、！!？?：:\s的]+", " ", cleaned).strip() or text)[:30]
 
 
 def guess_category(text: str) -> TicketCategory:
@@ -86,9 +70,11 @@ def extract_service_slots(text: str) -> dict[str, str]:
 
 
 def is_order_query(text: str) -> bool:
-    return bool(ORDER_NO_RE.search(text)) or any(hint in text for hint in ORDER_LOOKUP_HINTS) or (
-        "订单" in text and any(verb in text for verb in ORDER_LOOKUP_VERBS) and not any(word in text for word in KNOWLEDGE_EXCLUSIONS)
-    )
+    return bool(ORDER_NO_RE.search(text) or USER_ID_RE.search(text))
+
+
+def extract_user_id(text: str) -> int | None:
+    return int(match.group(1)) if (match := USER_ID_RE.search(text)) else None
 
 
 def rule_classify(text: str) -> IntentResult:
@@ -102,7 +88,7 @@ def rule_classify(text: str) -> IntentResult:
         return IntentResult(intent="write", confidence=0.9, reason="命中售后业务动作", slots=extract_service_slots(text))
     if order_query:
         order_no = ORDER_NO_RE.search(text)
-        slots = {"order_no": order_no.group(0).upper()} if order_no else {"keyword": extract_order_keyword(text)}
+        slots = {"order_no": order_no.group(0).upper()} if order_no else {"user_id": str(extract_user_id(text))}
         return IntentResult(intent="read", confidence=0.85, reason="只读请求，规则选择订单查询工具", slots=slots)
     return IntentResult(intent="read", confidence=0.75, reason="只读请求，规则选择知识库工具")
 

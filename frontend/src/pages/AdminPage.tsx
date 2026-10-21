@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { ReloadOutlined, RobotOutlined } from "@ant-design/icons";
 import { Button, Space, Table, Typography } from "antd";
 
-import { getMetrics } from "../api/agent";
+import { getEvaluation, getMetrics } from "../api/agent";
 import KpiCard from "../components/KpiCard";
 import VersionBadge from "../components/VersionBadge";
 import { navigate } from "../router";
-import type { AgentInfo, MetricsSummary } from "../types";
+import type { AgentInfo, EvaluationSummary, MetricsSummary } from "../types";
 
 const { Text } = Typography;
 
@@ -25,14 +25,18 @@ export default function AdminPage({
   onOpenLlmSettings: () => void;
 }) {
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null);
+  const [evaluation, setEvaluation] = useState<EvaluationSummary | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setMetrics(await getMetrics(7));
+      const [nextMetrics, nextEvaluation] = await Promise.all([getMetrics(7), getEvaluation()]);
+      setMetrics(nextMetrics);
+      setEvaluation(nextEvaluation);
     } catch {
       setMetrics(null);
+      setEvaluation(null);
     } finally {
       setLoading(false);
     }
@@ -44,6 +48,17 @@ export default function AdminPage({
 
   const kpis = metrics?.kpis;
   const intentRows = (metrics?.by_intent ?? []).map((row) => ({ ...row, key: row.intent }));
+  const evaluationFailures = (evaluation?.rows ?? [])
+    .filter((row) => !row.intent_ok || row.tool_ok === false || row.rag_hit === false)
+    .map((row) => ({
+      ...row,
+      key: row.id,
+      failures: [
+        !row.intent_ok ? "意图" : "",
+        row.tool_ok === false ? "工具" : "",
+        row.rag_hit === false ? "RAG" : "",
+      ].filter(Boolean).join(" / "),
+    }));
 
   return (
     <div className="shell">
@@ -97,6 +112,13 @@ export default function AdminPage({
             <KpiCard label="错误率" value={(kpis?.error_rate ?? 0).toFixed(2)} unit="%" hint="单轮失败占比" />
           </div>
 
+          <div className="kpi-row">
+            <KpiCard label="规则分类准确率" value={(evaluation?.intent_accuracy ?? 0).toFixed(1)} unit="%" hint="固定评测集 · 非在线请求" />
+            <KpiCard label="工具路由准确率" value={(evaluation?.tool_accuracy ?? 0).toFixed(1)} unit="%" hint="read 分支的知识库/订单选择" />
+            <KpiCard label="RAG Top-3 命中率" value={(evaluation?.rag_hit_rate ?? 0).toFixed(1)} unit="%" hint="期望来源出现在前三片段" />
+            <KpiCard label="评测样本" value={evaluation?.total ?? 0} unit="条" hint={evaluation ? `评测时间 ${evaluation.generated_at}` : "暂无评测"} />
+          </div>
+
           <div className="table-card">
             <div className="chart-head">
               <span>意图调用明细</span>
@@ -123,9 +145,37 @@ export default function AdminPage({
             />
           </div>
 
+          <div className="table-card">
+            <div className="chart-head">
+              <span>评测未通过用例</span>
+              <span className="muted">规则分类 · read 工具 · RAG Top-3</span>
+            </div>
+            <Table
+              size="small"
+              pagination={{ pageSize: 6, hideOnSinglePage: true }}
+              dataSource={evaluationFailures}
+              locale={{ emptyText: "当前固定评测集全部通过" }}
+              columns={[
+                { title: "编号", dataIndex: "id", key: "id", width: 58 },
+                { title: "问题", dataIndex: "query", key: "query", ellipsis: true },
+                { title: "预期", dataIndex: "expected_intent", key: "expected", width: 70 },
+                { title: "实际", dataIndex: "actual_intent", key: "actual", width: 70 },
+                { title: "失败项", dataIndex: "failures", key: "failures", width: 100 },
+                {
+                  title: "召回来源",
+                  dataIndex: "retrieved_sources",
+                  key: "sources",
+                  width: 180,
+                  ellipsis: true,
+                  render: (sources: string[]) => sources.join(", ") || "—",
+                },
+              ]}
+            />
+          </div>
+
           <Space>
             <Text type="secondary" style={{ fontSize: 11 }}>
-              POC 指标为进程内统计：重启清零、单实例有效；生产应接 Prometheus / 日志平台。
+              在线指标为进程内统计；固定评测集用于回归，不等同于真实线上流量评估。
             </Text>
           </Space>
         </div>

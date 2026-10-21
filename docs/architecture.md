@@ -71,7 +71,7 @@ read、write、human 三类都是明确、可测试的执行路径；read 内部
 当前 POC 不向模型暴露工具。read 节点按规则调用订单查询或知识库工具；售后业务只生成
 草稿，用户确认后才通过独立的 `service-actions` 路由创建工单。
 
-订单查询是 `read` 分支下的**确定性只读工具**：订单号或订单查询关键词会跳过 RAG，
+订单查询是 `read` 分支下的**确定性只读工具**：精确订单号或显式 user_id 会跳过 RAG，
 直接调用 `JsonOrderStore`；查不到时让用户补订单号，不创建售后工单。
 
 ## 分层与职责
@@ -109,6 +109,10 @@ SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确�
 模型 API Key 通过前端右下角设置窗口提交到 `/api/llm/config`。后端先创建模型并发起最小
 验证调用，成功后重建 LangGraph；Key 只存在于当前进程内存，不写入 `.env`、浏览器存储或日志。
 该模式是单实例 POC 配置，多用户生产环境应改为用户级密钥托管或服务端集中网关。
+
+运营概览同时读取 `/api/evaluation/summary`，对 `eval_cases.json` 中 40 条固定样本计算规则
+意图准确率、read 工具准确率和 RAG Top-3 来源命中率，并列出未通过用例。该评测不调用真实模型，
+因此不会因刷新后台产生额外 Token 费用；真实 LLM 对照评测属于后续扩展。
 
 前端页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
 `?panel=orders`（本轮订单）、`?panel=service`（业务办理）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→

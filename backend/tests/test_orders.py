@@ -1,4 +1,4 @@
-"""订单存储用例：读取、按条件检索、大小写不敏感。"""
+"""订单存储用例：仅按订单号或 user_id 查询。"""
 
 from __future__ import annotations
 
@@ -15,34 +15,26 @@ def test_loads_fifty_orders() -> None:
 
 def test_get_order_is_case_insensitive() -> None:
     store = _store()
-    first = store.search(limit=1)[0]
-    assert store.get(first.order_no.lower()) is not None
+    assert store.get("so202609160001") is not None
     assert store.get("SO197001019999") is None
 
 
-def test_search_by_status_and_user() -> None:
+def test_search_by_user_id_only() -> None:
     store = _store()
-    refunding = store.search(status=60, limit=10)
-    assert refunding and all(order.order_status == 60 for order in refunding)
-
-    user_id = store.search(limit=1)[0].user_id
-    by_user = store.search(user_id=user_id, limit=50)
-    assert by_user and all(order.user_id == user_id for order in by_user)
+    by_user = store.search(user_id=10002, limit=50)
+    assert by_user and all(order.user_id == 10002 for order in by_user)
+    assert store.search() == []
 
 
-def test_search_by_keyword_matches_order_no_or_product() -> None:
+def test_exact_order_lookup() -> None:
     store = _store()
-    first = store.search(limit=1)[0]
-    by_no = store.search(q=first.order_no[-6:], limit=10)
-    assert any(order.order_no == first.order_no for order in by_no)
-
-    product = first.items[0]["product_name"][:4]
-    assert store.search(q=product, limit=50)
+    assert store.get("SO202609160001") is not None
+    assert store.get("SO20260916000") is None
 
 
-def test_search_respects_limit_and_sorts_desc() -> None:
+def test_user_search_respects_limit_and_sorts_desc() -> None:
     store = _store()
-    results = store.search(limit=5)
-    assert len(results) == 5
+    results = store.search(user_id=10002, limit=2)
+    assert len(results) == 2
     created = [order.created_at for order in results]
     assert created == sorted(created, reverse=True)

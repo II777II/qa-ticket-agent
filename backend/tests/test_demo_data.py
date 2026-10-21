@@ -66,3 +66,10 @@ def test_kb_categories_and_tags() -> None:
     tags = json.loads((settings.kb_root / "tags.json").read_text(encoding="utf-8"))
     assert len(categories) == 8
     assert 10 <= len(tags) <= 30
+
+
+def test_evaluation_dataset_contract() -> None:
+    cases = json.loads((settings.kb_root.parent / "eval_cases.json").read_text(encoding="utf-8"))
+    assert len(cases) == 40
+    assert len({case["id"] for case in cases}) == 40
+    assert all(case["expected_intent"] in {"read", "write", "human"} for case in cases)

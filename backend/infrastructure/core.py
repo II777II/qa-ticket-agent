@@ -40,6 +40,7 @@ from backend.domain.core import (
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 PROJECT_ROOT = BACKEND_DIR.parent
 DEMO_DIR = BACKEND_DIR / "data" / "demo" / "ecommerce"
+EVAL_CASES_FILE = DEMO_DIR / "eval_cases.json"
 load_dotenv(PROJECT_ROOT / ".env")
 CONTEXT_HEADER = "【参考资料】"
 CONTEXT_FOOTER = "【参考资料结束】"
@@ -186,19 +187,11 @@ class JsonOrderStore:
     def get(self, order_no: str) -> OrderRecord | None:
         return self._by_no.get(order_no.strip().upper())
 
-    def search(self, *, q: str = "", status: int | None = None, user_id: int | None = None, limit: int = 20) -> list[OrderRecord]:
-        key, rows = q.strip().lower(), []
-        for order in self._orders:
-            if status is not None and order.order_status != status or user_id is not None and order.user_id != user_id:
-                continue
-            text = " ".join([
-                order.order_no, str(order.user_id),
-                *(str(x) for x in (order.user or {}).values()),
-                *(str(x.get("product_name", "")) for x in order.items),
-            ]).lower()
-            if not key or key in text:
-                rows.append(order)
-        return sorted(rows, key=lambda x: x.created_at, reverse=True)[:max(limit, 0)]
+    def search(self, *, user_id: int | None = None, limit: int = 20) -> list[OrderRecord]:
+        if user_id is None:
+            return []
+        rows = [order for order in self._orders if order.user_id == user_id]
+        return sorted(rows, key=lambda order: order.created_at, reverse=True)[:max(limit, 0)]
 
     def count(self) -> int:
         return len(self._orders)

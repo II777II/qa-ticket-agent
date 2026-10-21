@@ -147,6 +147,30 @@ export interface MetricsSummary {
   by_intent: IntentMetric[];
 }
 
+export interface EvaluationRow {
+  id: string;
+  query: string;
+  expected_intent: string;
+  expected_tool?: string | null;
+  expected_source?: string | null;
+  actual_intent: string;
+  actual_tool: string | null;
+  retrieved_sources: string[];
+  intent_ok: boolean;
+  tool_ok: boolean | null;
+  rag_hit: boolean | null;
+}
+
+export interface EvaluationSummary {
+  generated_at: string;
+  classifier: string;
+  total: number;
+  intent_accuracy: number;
+  tool_accuracy: number;
+  rag_hit_rate: number;
+  rows: EvaluationRow[];
+}
+
 /** 本地保存的一次会话（localStorage） */
 export interface Conversation {
   id: string;

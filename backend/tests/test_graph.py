@@ -82,7 +82,7 @@ def test_read_branch_uses_knowledge_tool(store: JsonTicketStore, retriever: InMe
 def test_read_branch_uses_order_tool_without_rag(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:
     graph = _build(store, retriever)
     state = graph.invoke(
-        {"messages": [HumanMessage(content="帮我查询张三的订单")]}, {"configurable": {"thread_id": "t2"}}
+        {"messages": [HumanMessage(content="查询用户 10018 的订单")]}, {"configurable": {"thread_id": "t2"}}
     )
     assert state["intent"] == "read"
     assert state["orders"]

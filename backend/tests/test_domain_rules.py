@@ -5,8 +5,8 @@ from __future__ import annotations
 from datetime import date
 
 from backend.domain.core import (
-    TicketCreate, TicketRecord, duplicate_of, extract_order_keyword, is_order_query,
-    next_ticket_id, rule_classify,
+    TicketCreate, TicketRecord, duplicate_of, extract_user_id, is_order_query, next_ticket_id,
+    rule_classify,
 )
 
 TODAY = date(2026, 10, 16)
@@ -66,11 +66,12 @@ def test_three_way_rule_classifier() -> None:
     assert rule_classify("退款多久到账").intent == "read"
     assert rule_classify("订单 SO202609150020 商品损坏，申请换货").intent == "write"
     assert rule_classify("我要投诉并转人工").intent == "human"
+    assert rule_classify("查询用户 10018 的订单").slots == {"user_id": "10018"}
 
 
-def test_read_tool_rules_distinguish_order_and_knowledge() -> None:
-    assert is_order_query("帮我查询张三的订单")
-    assert is_order_query("我要朱一订单")
+def test_order_tool_requires_order_no_or_user_id() -> None:
+    assert is_order_query("查询用户 10018 的订单")
+    assert is_order_query("查询订单 SO202609150020")
     assert not is_order_query("退货退款和发票怎么处理")
-    assert extract_order_keyword("查看张三订单") == "张三"
-    assert extract_order_keyword("我要朱一订单") == "朱一"
+    assert not is_order_query("查看张三订单")
+    assert extract_user_id("user_id=10018") == 10018

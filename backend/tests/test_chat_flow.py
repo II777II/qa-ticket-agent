@@ -36,8 +36,8 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     assert "[1]" in consulted["text"]
 
     # 2. 订单查询：read 分支确定性调用 order_query，不出引用、不建单
-    ordered = _turn(runtime, "帮我查询张三的订单", thread)
-    assert ordered["orders"], "应返回张三的订单"
+    ordered = _turn(runtime, "查询用户 10018 的订单", thread)
+    assert ordered["orders"], "应返回 user_id=10018 的订单"
     assert not ordered["citations"]
 
     # 5. 多轮追问：上下文累积且仍能检索
@@ -75,9 +75,9 @@ def test_unknown_question_falls_back_without_citation(isolated_runtime: AgentRun
     assert result["text"]
 
 
-def test_order_query_uses_deterministic_tool_without_rag(isolated_runtime: AgentRuntime) -> None:
-    """「查张三的订单」应走 read 分支的 order_query 工具，不引用知识库、也不建售后工单。"""
-    result = _turn(isolated_runtime, "帮我查询张三的订单", "flow-order")
+def test_user_id_query_uses_deterministic_tool_without_rag(isolated_runtime: AgentRuntime) -> None:
+    """显式 user_id 应走 read 分支的 order_query 工具，不引用知识库、也不建售后工单。"""
+    result = _turn(isolated_runtime, "查询用户 10018 的订单", "flow-order")
     assert result["orders"]
     assert result["citations"] == []
     assert "SO" in result["text"]
@@ -86,19 +86,18 @@ def test_order_query_uses_deterministic_tool_without_rag(isolated_runtime: Agent
 def test_missing_order_returns_plain_text(isolated_runtime: AgentRuntime) -> None:
     """确定性订单工具没命中时，也应只输出文本，不能泄露 AIMessage 对象表示。"""
     result = _turn(isolated_runtime, "查询订单 SO197001019999", "flow-order-missing")
-    assert result["text"] == "没有找到订单，请提供 SO 开头的订单号、姓名或手机号。"
+    assert result["text"] == "没有找到订单，请提供 SO 开头的订单号或 user_id。"
     assert "additional_kwargs" not in result["text"]
 
 
-def test_view_name_order_extracts_customer_name(isolated_runtime: AgentRuntime) -> None:
-    """「查看张三订单」必须去掉查看和订单，只按“张三”查询。"""
+def test_name_only_order_is_rejected(isolated_runtime: AgentRuntime) -> None:
+    """姓名不能作为订单查询条件。"""
     result = _turn(isolated_runtime, "查看张三订单", "flow-view-order")
-    assert result["orders"]
-    assert "没有找到订单" not in result["text"]
+    assert result["orders"] == []
 
 
-def test_want_name_order_uses_order_tool(isolated_runtime: AgentRuntime) -> None:
-    result = _turn(isolated_runtime, "我要朱一订单", "flow-want-order")
+def test_explicit_user_id_uses_order_tool(isolated_runtime: AgentRuntime) -> None:
+    result = _turn(isolated_runtime, "我要用户 10019 的订单", "flow-want-order")
     assert result["orders"]
     assert result["citations"] == []
     assert all(order["customer"] == "朱一" for order in result["orders"])

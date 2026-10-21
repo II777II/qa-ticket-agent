@@ -40,13 +40,13 @@ Copy-Item .env.example .env      # 什么都不填也能跑（演示模式）
 # 命令行验收：能流式输出回答即通过
 python -m backend.scripts.cli_chat --once "退款多久到账？"
 
-# 订单查询：按收货人姓名/订单号直接查，不建工单
-python -m backend.scripts.cli_chat --once "帮我查询张三的订单"
+# 订单查询：按 user_id 或精确订单号直接查，不建工单
+python -m backend.scripts.cli_chat --once "查询用户 10019 的订单"
 
 # 走一遍「知识库问答 → 订单查询 → 多轮追问」（演示模式下也能跑）
 python -m backend.scripts.cli_chat
 #   你 > 退款多久到账                          <- 知识库问答，带引用
-#   你 > 帮我查询张三的订单                    <- read 分支调用 order_query，不建单
+#   你 > 查询用户 10019 的订单                  <- read 分支调用 order_query，不建单
 #   你 > 那退款失败会怎么处理                  <- 多轮追问
 
 # 后端：起 HTTP 服务（/docs 里有交互式接口文档）
@@ -104,7 +104,8 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | GET | `/api/kb/articles?q=&category=` | 知识库文章列表（目录/分类/关键字） |
 | GET | `/api/kb/categories` | 知识库分类 |
 | GET | `/api/metrics/summary?days=7` | 运营指标：Token、首字延迟、请求量、错误率、按意图明细 |
-| GET | `/api/orders?q=&status=&user_id=` | 电商订单查询（50 条演示订单） |
+| GET | `/api/evaluation/summary` | 40 条固定评测集：规则分类、工具路由与 RAG Top-3 命中率 |
+| GET | `/api/orders?order_no=&user_id=` | 电商订单查询；必须提供精确订单号或 user_id |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
 所有对话接口共用 `start` / `intent` / `token` / `order` / `service_draft` /
@@ -125,7 +126,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 | `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出**这一轮**问答的 Top-K 检索命中（来源、小节、相关度、片段） |
 | `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** read 分支 `order_query` 工具查到的订单（单号/状态/金额/商品/收货人） |
 | `#/chat?panel=service` | 对话 + 业务办理 | 右侧编辑槽位、查看缺失提醒，并在核对后确认提交 |
-| `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
+| `#/orders` | 订单查询 | 仅按精确订单号或 user_id 查询；右侧查看明细、金额、支付/退款与状态时间线 |
 | `#/kb` | 知识库检索 | 8 个分类浏览 50 篇 HTML；关键词检索 + RAG 命中片段，点击打开 HTML 原文 |
 | `#/admin` | 后台管理 | Token 消耗、平均首字延迟、请求总量、错误率、意图调用明细 |
 
@@ -142,14 +143,15 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 
 | 意图 | HTTP 分支 | 判定（规则兜底） | 分支行为 | 前端事件 |
 | --- | --- | --- | --- | --- |
-| `read` 只读查询 | `POST /branch/read` | 排除投诉和明确业务动作后的查询请求 | 订单号/查订单规则调用 `order_query`；其他调用 `knowledge_search` | `order` 或 `citation` + `token` |
+| `read` 只读查询 | `POST /branch/read` | 排除投诉和明确业务动作后的查询请求 | 精确订单号或 user_id 调用 `order_query`；其他调用 `knowledge_search` | `order` 或 `citation` + `token` |
 | `write` 业务办理 | `POST /branch/write` | 建单、申请退换修、办理售后等明确动作 | 识别槽位、生成可编辑草稿；确认后提交 | `service_draft` + `token` |
 | `human` 人工/兜底 | `POST /branch/human` | 投诉、转人工、问候、闲聊及未知意图 | 兜底话术；演示版未接人工坐席 | `token` |
 
 分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
 每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。`/chat` 负责自动分类；
 `/branch/*` 则由 HTTP 路径直接锁定意图，便于联调、测试和后续按分支独立扩展。
-`read` 的知识库与订单选择不再询问模型，而是按订单号、订单查询关键词和知识排除词确定性分派。
+`read` 的知识库与订单选择不再询问模型，而是按精确订单号或 user_id 确定性分派；姓名、
+手机号、商品关键词和空条件都不会进入订单仓储。
 
 业务办理槽位包括业务类型、订单号、联系人和问题描述。缺失项会在右侧高亮；
 信息齐全后仍需勾选核对声明并点击“确认提交”，随后由 `/branch/service/confirm` 创建工单。
@@ -157,7 +159,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 87 个用例，约 3 秒
+python -m pytest            # 89 个用例，约 3 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -237,7 +239,7 @@ docs/
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
   interview-notes.md   30 秒陈述与高频追问应对
   deployment.md        三种跑法、compose 升级步骤、日志与排查
-  test-cases.md        87 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
+  test-cases.md        89 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
 ```
 
