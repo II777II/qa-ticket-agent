@@ -56,6 +56,7 @@ def test_chat_service_injects_langfuse_callback_and_session() -> None:
         graph=graph,
         metrics=Metrics(),
         tracing=LangfuseTracing(handler=handler, status="enabled"),
+            snapshot=lambda: (graph, "test", "test"),
     )
 
     async def consume() -> None:

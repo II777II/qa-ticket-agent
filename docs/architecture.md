@@ -110,6 +110,9 @@ SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确�
 验证调用，成功后重建 LangGraph；Key 只存在于当前进程内存，不写入 `.env`、浏览器存储或日志。
 该模式是单实例 POC 配置，多用户生产环境应改为用户级密钥托管或服务端集中网关。
 
+`reconfigure_llm()` 会在锁内重新编译 LangGraph，并原子替换整组 `graph/llm/provider/model`。
+每轮请求通过 `snapshot()` 固定本轮使用的图；切换发生后，新请求使用新图，已开始的流继续使用旧图。
+
 运营概览同时读取 `/api/evaluation/summary`，对 `eval_cases.json` 中 40 条固定样本计算规则
 意图准确率、read 工具准确率和 RAG Top-3 来源命中率，并列出未通过用例。该评测不调用真实模型，
 因此不会因刷新后台产生额外 Token 费用；真实 LLM 对照评测属于后续扩展。

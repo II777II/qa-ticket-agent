@@ -108,6 +108,9 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | GET | `/api/orders?order_no=&user_id=` | 电商订单查询；必须提供精确订单号或 user_id |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
+模型切换调用 `AgentRuntime.reconfigure_llm()`：锁内重新编译 LangGraph 并原子替换
+`graph/llm/provider/model`。切换前已开始的流继续使用旧图，新请求通过 `snapshot()` 使用新图。
+
 所有对话接口共用 `start` / `intent` / `token` / `order` / `service_draft` /
 `citation` / `done` / `error` 事件契约。业务草稿阶段只读；只有用户点击“确认提交”并
 调用 `/branch/service/confirm` 后才创建售后工单。

@@ -104,7 +104,7 @@ async def agent_info(runtime: AgentRuntime = Depends(get_runtime)):
 
 
 @router.post("/api/llm/config", tags=["system"])
-async def configure_llm(req: LlmConfigRequest, runtime: AgentRuntime = Depends(get_runtime)):
+async def set_llm_config(req: LlmConfigRequest, runtime: AgentRuntime = Depends(get_runtime)):
     provider, model = req.provider, req.model.strip()
     key = req.api_key.get_secret_value().strip() if req.api_key else ""
     try:
@@ -114,7 +114,7 @@ async def configure_llm(req: LlmConfigRequest, runtime: AgentRuntime = Depends(g
     except Exception as exc:
         logger.warning("LLM 配置验证失败: %s", type(exc).__name__)
         raise HTTPException(status_code=400, detail="API Key 验证失败或模型不可用") from None
-    runtime.configure_llm(llm, provider, model or LLM_MODELS.get(provider, "mock"))
+    runtime.reconfigure_llm(llm, provider, model or LLM_MODELS.get(provider, "mock"))
     return runtime.describe()
 
 

@@ -13,7 +13,6 @@ from backend.application.graph import (
     EVENT_DONE, EVENT_ERROR, EVENT_INTENT, EVENT_START, EVENT_TOKEN,
 )
 from backend.domain.core import IntentName
-from backend.infrastructure.config import settings
 from backend.infrastructure.llm import message_text
 from backend.infrastructure.observability import estimate_tokens
 
@@ -46,12 +45,12 @@ class ChatService:
         if self._runtime.tracing and self._runtime.tracing.handler:
             callbacks.append(self._runtime.tracing.handler)
         config["callbacks"] = callbacks
-        provider = getattr(self._runtime, "provider", "") or settings.llm_provider
+        graph, provider, _ = self._runtime.snapshot()
         yield EVENT_START, {"thread_id": thread_id, "provider": provider, "mock": provider == "mock"}
         started, first_at, answer, final_text = time.perf_counter(), None, [], ""
         ok, intent = True, requested_intent or "unknown"
         try:
-            async for mode, payload in self._runtime.graph.astream(
+            async for mode, payload in graph.astream(
                 {"messages": [HumanMessage(content=message)], "requested_intent": requested_intent},
                 config=config,
                 stream_mode=["messages", "custom", "updates"],

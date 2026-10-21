@@ -34,7 +34,14 @@ class _Metrics:
 
 def test_chat_service_sums_usage_across_llm_calls() -> None:
     metrics = _Metrics()
-    runtime = SimpleNamespace(graph=_UsageGraph(), metrics=metrics, tracing=None, provider="test")
+    graph = _UsageGraph()
+    runtime = SimpleNamespace(
+        graph=graph,
+        metrics=metrics,
+        tracing=None,
+        provider="test",
+        snapshot=lambda: (graph, "test", "test"),
+    )
 
     async def consume() -> None:
         async for _event, _payload in ChatService(runtime).stream("测试", "usage-thread"):

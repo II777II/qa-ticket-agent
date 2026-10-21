@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from backend.application.graph import build_graph
@@ -30,13 +31,22 @@ class AgentRuntime:
     tracing: LangfuseTracing | None = None
     provider: str = ""
     model: str = ""
+    _llm_lock: Any = field(default_factory=threading.RLock, init=False, repr=False, compare=False)
+
+    def snapshot(self) -> tuple[Any, str, str]:
+        with self._llm_lock:
+            return (
+                self.graph,
+                self.provider or settings.llm_provider,
+                self.model or settings.llm_model,
+            )
 
     def describe(self) -> dict[str, Any]:
-        provider = self.provider or settings.llm_provider
+        _, provider, model = self.snapshot()
         return {
             "provider": provider,
             "mock": provider == "mock",
-            "model": self.model or settings.llm_model,
+            "model": model,
             "tickets": self.tickets.count(),
             "orders": self.orders.count(),
             "kb_articles": self.knowledge.count(),
@@ -51,14 +61,18 @@ class AgentRuntime:
     def shutdown(self) -> None:
         self.tracing and self.tracing.shutdown()
 
-    def configure_llm(self, llm: Any, provider: str, model: str) -> None:
-        self.llm, self.provider, self.model = llm, provider, model
-        self.graph = build_graph(
-            llm=llm,
-            retriever=self.retriever,
-            checkpointer=self.checkpointer,
-            order_service=self.orders,
-        )
+    def reconfigure_llm(self, llm: Any, provider: str, model: str) -> None:
+        with self._llm_lock:
+            graph = build_graph(
+                llm=llm,
+                retriever=self.retriever,
+                checkpointer=self.checkpointer,
+                order_service=self.orders,
+            )
+            self.graph = graph
+            self.llm = llm
+            self.provider = provider
+            self.model = model
 
     def evaluate(self) -> dict[str, Any]:
         cases = json.loads(EVAL_CASES_FILE.read_text(encoding="utf-8"))
