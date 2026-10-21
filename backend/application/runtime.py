@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from backend.application.agent import build_graph, create_tools
+from backend.application.agent import build_graph
 from backend.application.knowledge import KnowledgeService
 from backend.application.orders import OrderService
 from backend.application.tickets import TicketService
@@ -36,7 +36,6 @@ class AgentRuntime:
     metrics: MetricsCollector
     orders: OrderService
     knowledge: KnowledgeService
-    tools: list[Any] = field(default_factory=list)
     retriever: Any | None = None
     checkpointer: Any | None = None
     store: Any | None = None
@@ -47,7 +46,6 @@ class AgentRuntime:
             "provider": settings.llm_provider,
             "mock": settings.mock_mode,
             "model": settings.llm_model,
-            "tools": [tool.name for tool in self.tools],
             "tickets": self.tickets.count(),
             "orders": self.orders.count(),
             "kb_articles": self.knowledge.count(),
@@ -71,19 +69,16 @@ def create_runtime() -> AgentRuntime:
     orders = OrderService(create_order_store())
     knowledge = KnowledgeService(create_knowledge_catalog())
     retriever = create_retriever()
-    tools = create_tools(orders)
     tracing = create_langfuse_tracing()
     graph = build_graph(
         llm=llm,
-        tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,
         order_service=orders,
     )
     logger.info(
-        "运行时就绪 provider=%s tools=%s chunks=%s",
+        "运行时就绪 provider=%s chunks=%s",
         settings.llm_provider,
-        [tool.name for tool in tools],
         getattr(retriever, "chunk_count", lambda: 0)(),
     )
     return AgentRuntime(
@@ -93,7 +88,6 @@ def create_runtime() -> AgentRuntime:
         metrics=MetricsCollector(),
         orders=orders,
         knowledge=knowledge,
-        tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,
         store=store,

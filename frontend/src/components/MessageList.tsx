@@ -1,18 +1,7 @@
-import { Bubble, ThoughtChain } from "@ant-design/x";
-import type { ThoughtChainItemType } from "@ant-design/x";
+import { Bubble } from "@ant-design/x";
 import { RobotOutlined, UserOutlined } from "@ant-design/icons";
 
 import type { ChatMessage } from "../types";
-
-function toolItems(message: ChatMessage): ThoughtChainItemType[] {
-  return message.tools.map((tool) => ({
-    key: tool.key,
-    title: tool.phase === "call" ? `调用工具 ${tool.name}` : `工具返回 ${tool.name}`,
-    description: tool.message || undefined,
-    status: tool.phase === "call" ? "loading" : tool.ok === false ? "error" : "success",
-    collapsible: Boolean(tool.message),
-  }));
-}
 
 function body(message: ChatMessage) {
   if (message.error) return <div className="bubble-text bubble-error">{message.error}</div>;
@@ -34,7 +23,6 @@ export default function MessageList({ messages, onFocusTurn }: MessageListProps)
     loading: message.loading,
     footer: (
       <div className="bubble-footer">
-        {message.tools.length > 0 && <ThoughtChain items={toolItems(message)} defaultExpandedKeys={[]} />}
         {message.citations.length > 0 && (
           <div className="cite-row">
             {message.citations.map((citation) => (

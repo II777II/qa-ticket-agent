@@ -1,4 +1,4 @@
-"""对话路由：自动分类入口与五路显式意图分支。"""
+"""对话路由：自动分类入口与四路显式意图分支。"""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ router.add_api_route(
     _endpoint(None),
     methods=["POST"],
     response_class=EventSourceResponse,
-    summary="流式对话（SSE，自动识别五路意图）",
+    summary="流式对话（SSE，自动识别四路意图）",
     tags=["chat"],
     name="chat",
 )
@@ -42,7 +42,6 @@ for _intent, _label in (
     ("knowledge", "知识库问答"),
     ("query", "订单查询"),
     ("service", "售后业务草稿"),
-    ("logistics", "物流 Agent + Tools"),
     ("fallback", "兜底"),
 ):
     router.add_api_route(

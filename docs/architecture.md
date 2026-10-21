@@ -19,7 +19,7 @@ python -m backend.scripts.draw_graph --png --html
 | `docs/graph.html` | 单页预览（浏览器打开，按需从 CDN 加载 mermaid） |
 | 终端 | ASCII 图（需要 `pip install grandalf`），内网无图形环境时最省事 |
 
-图上会带上「agent 内部做了什么（含 RAG）」与「tools 里有哪些工具」，两处标注都是从运行时读出来的。
+图上的节点和条件边标注由运行时结构生成。
 离线渲染截图需要 `pillow` 裁空白边框（没装就保留原始尺寸）。
 
 在 Jupyter / IPython 里内嵌显示：
@@ -46,17 +46,10 @@ flowchart TD
     C -- knowledge --> K["knowledge<br/>RAG 检索 + 生成回答"]
     C -- query --> Q["query<br/>OrderService 查询"]
     C -- service --> V["service<br/>槽位抽取 + 工单草稿"]
-    C -- logistics --> L["logistics<br/>物流预处理"]
-    L --> LA["logistics_agent<br/>bind_tools + 决策"]
-    LA -- tools --> LT["logistics_tools<br/>query_order"]
-    LT --> LA
-    LA -- guard --> LG["logistics_guard<br/>循环上限保护"]
     C -- fallback --> F["fallback<br/>投诉/转人工/闲聊"]
     K --> E([__end__])
     Q --> E
     V --> E
-    LA -- end --> E
-    LG --> E
     F --> E
 ```
 
@@ -64,33 +57,21 @@ flowchart TD
 | --- | --- |
 | `preprocess` | 取最后一条用户消息，去空白并截断到 2000 字 |
 | `classify` | `classify_intent()`：优先 LLM `with_structured_output`，演示模式/失败时用 `rule_classify()`；产出 intent/confidence/reason/slots |
-| `route_by_intent` | 条件边：只允许 knowledge / query / service / logistics / fallback，未知意图走 fallback |
+| `route_by_intent` | 条件边：只允许 knowledge / query / service / fallback，未知意图走 fallback |
 | `knowledge` | 调用检索器并拼【参考资料】，再 `llm.invoke()` 生成带引用回答 |
 | `query` | 解析订单号/关键词，调用 `OrderService.get/search`，返回订单列表（不检索） |
 | `service` | 抽取业务类型/订单号/联系人等槽位，生成可编辑草稿；用户确认后才提交 |
-| `logistics` | 抽取物流查询条件，并进入 Agent/Tools 循环 |
-| `logistics_agent` | 绑定工具并调用模型，决定是否继续调用工具 |
-| `logistics_tools` | 执行 `query_order` 等物流试点工具，把 ToolMessage 返回 Agent |
-| `logistics_guard` | Agent 循环超过 4 步时安全结束 |
 | `fallback` | 投诉/转人工/闲聊兜底话术；演示版无人工坐席 |
 
-当前只有 `logistics` 分支使用 Agent/Tools 循环；knowledge、query、service、fallback
-保持确定性或单次 LLM 调用。这样可以在一个图里同时保留确定性路径与未来复杂 Agent 路径。
+knowledge、query、service、fallback 四路都是明确、可测试的执行路径。
 
-## 工具是什么
+## Agent 与工具边界
 
-工具就是**普通 Python 函数**，只是用 `@tool` 装饰并声明了参数 schema。当前只保留一个
-只读订单工具，由 `create_tools(orders)` 创建；物流试点通过 `ToolNode` 执行并返回 `ToolMessage`。
-
-| 工具 | 作用 | 关键参数 | 什么时候会被调用 | 返回 |
-| --- | --- | --- | --- | --- |
-| `query_order` | 查订单 | `order_no` / `keyword`（姓名/手机号/商品）/ `status` | 用户问「我的订单/订单进度/订单号」，命中 `order_lookup` 意图 | `{ok, orders[], message}` |
-
-工具返回统一 JSON 字符串。售后业务写入不走模型工具，只允许用户在右侧面板确认后调用
-`service-actions`。
+当前 POC 不向模型暴露工具。订单查询由确定性 query 节点调用 `OrderService`；售后业务只生成
+草稿，用户确认后才通过独立的 `service-actions` 路由创建工单。
 
 订单查询是**只读工具**：`order_lookup` 意图会跳过 RAG（避免把「订单」当成知识问题），
-直接调用 `query_order` 查 `OrderService`；查不到时让用户补订单号，不创建售后工单。
+query 节点直接调用 `OrderService`；查不到时让用户补订单号，不创建售后工单。
 
 ## 分层与职责
 
@@ -119,7 +100,6 @@ main app
 │       ├── POST /branch/knowledge
 │       ├── POST /branch/query
 │       ├── POST /branch/service
-│       ├── POST /branch/logistics
 │       └── POST /branch/fallback
 └── service-actions router
     └── POST /branch/service/confirm
@@ -156,7 +136,6 @@ Langfuse 启用时，ChatService 会把 `CallbackHandler` 注入 LangGraph 调�
 | `token` | 模型流式增量 | `text` |
 | `order` | 订单查询完成 | `orders[]` |
 | `service_draft` | 业务草稿生成 | 槽位、缺失项、ready、`requires_confirmation` |
-| `tool` | 工具被调用 / 返回 | `phase=call\|result`、`name`、`ok`、`message` |
 | `citation` | 本轮检索命中 | `index` / `source` / `title` / `snippet` / `score` |
 | `done` / `error` | 一轮结束 | —— |
 
@@ -204,7 +183,7 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 进程内指标只保留 KPI 和最终意图聚合 `calls / tokens / avg_latency_ms / success_rate`，
 用于后续按知识问答、订单、业务办理、物流等分支分别优化。
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
-| 编排 | preprocess + classify + 五路分支；logistics 使用 Agent/Tools | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
+| 编排 | preprocess + classify + 四路分支 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 
 ## 几个刻意的设计取舍
 

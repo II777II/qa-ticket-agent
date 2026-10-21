@@ -1,8 +1,7 @@
-"""离线演示模型：模拟文本回答与 query_order 工具调用。"""
+"""离线演示模型：生成占位文本和基于检索资料的演示回答。"""
 
 from __future__ import annotations
 
-import json
 import re
 from typing import Any, Iterator, Sequence
 
@@ -14,12 +13,9 @@ from langchain_core.messages import (
     BaseMessage,
     HumanMessage,
     SystemMessage,
-    ToolMessage,
 )
 from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
-from pydantic import Field
 
-from backend.domain.intent import ORDER_NO_RE, extract_order_keyword, rule_classify
 from backend.infrastructure.retrieval.in_memory import CONTEXT_FOOTER, CONTEXT_HEADER
 
 
@@ -62,22 +58,10 @@ def _documents(messages: Sequence[BaseMessage]) -> list[tuple[str, str]]:
     ]
 
 
-def _tool_call(name: str, args: dict[str, Any]) -> AIMessage:
-    return AIMessage(
-        content="",
-        tool_calls=[{"name": name, "args": args, "id": f"call_mock_{name}", "type": "tool_call"}],
-    )
-
-
 class FakeChatModel(BaseChatModel):
-    bound_tools: list[Any] = Field(default_factory=list)
-
     @property
     def _llm_type(self) -> str:
         return "fake-chat-model"
-
-    def bind_tools(self, tools: Sequence[Any], **kwargs: Any) -> "FakeChatModel":
-        return self.model_copy(update={"bound_tools": list(tools or [])})
 
     def _generate(
         self,
@@ -86,7 +70,7 @@ class FakeChatModel(BaseChatModel):
         run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> ChatResult:
-        message = self._plan(messages) or AIMessage(content=self._compose(messages))
+        message = AIMessage(content=self._compose(messages))
         return ChatResult(generations=[ChatGeneration(message=message)])
 
     def _stream(
@@ -96,70 +80,14 @@ class FakeChatModel(BaseChatModel):
         run_manager: CallbackManagerForLLMRun | None = None,
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
-        planned = self._plan(messages)
-        if planned:
-            call = planned.tool_calls[0]
-            yield ChatGenerationChunk(
-                message=AIMessageChunk(
-                    content="",
-                    tool_call_chunks=[
-                        {
-                            "name": call["name"],
-                            "args": json.dumps(call["args"], ensure_ascii=False),
-                            "id": call["id"],
-                            "index": 0,
-                            "type": "tool_call_chunk",
-                        }
-                    ],
-                )
-            )
-            return
         answer = self._compose(messages)
         for index in range(0, len(answer), 8):
             yield ChatGenerationChunk(message=AIMessageChunk(content=answer[index : index + 8]))
 
-    def _plan(self, messages: list[BaseMessage]) -> AIMessage | None:
-        names = {getattr(tool, "name", "") for tool in self.bound_tools}
-        question = _last_human(messages)
-        if (
-            "query_order" not in names
-            or not question
-            or (messages and isinstance(messages[-1], ToolMessage))
-            or rule_classify(question).intent not in {"query", "logistics"}
-        ):
-            return None
-        order_no = ORDER_NO_RE.search(question)
-        args = (
-            {"order_no": order_no.group(0).upper()}
-            if order_no
-            else {"keyword": extract_order_keyword(question)}
-        )
-        return _tool_call("query_order", args)
-
     def _compose(self, messages: list[BaseMessage]) -> str:
-        if messages and isinstance(messages[-1], ToolMessage):
-            return self._compose_tool(messages[-1])
         question = _last_human(messages)
         documents = _documents(messages)
         if documents:
             parts = [f"{head}\n{body[:160]}" for head, body in documents]
             return f"【演示模式】检索到 {len(documents)} 段资料：\n\n" + "\n\n".join(parts)
         return f"【演示模式】问题：{question or '（空）'}"
-
-    @staticmethod
-    def _compose_tool(message: ToolMessage) -> str:
-        try:
-            payload = json.loads(message.content)
-        except (TypeError, json.JSONDecodeError):
-            return f"【演示模式】工具返回：{message.content}"
-        if not payload.get("ok", True):
-            return f"【演示模式】{payload.get('message', '工具执行失败')}"
-        orders = payload.get("orders") or []
-        if not orders:
-            return f"【演示模式】{payload.get('message', '没有查到结果')}"
-        lines = [
-            f"- {order['order_no']}｜{order['status']}｜¥{order['payable_amount']:.2f}｜"
-            + " / ".join(item["name"] for item in order["items"])
-            for order in orders
-        ]
-        return "【演示模式】查到这些订单：\n" + "\n".join(lines)

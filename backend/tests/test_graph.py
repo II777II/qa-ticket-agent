@@ -1,4 +1,4 @@
-"""编排用例：预处理 → 意图识别 → 五路路由。"""
+"""编排用例：预处理 → 意图识别 → 四路路由。"""
 
 from __future__ import annotations
 
@@ -6,12 +6,11 @@ import asyncio
 
 import pytest
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
 from backend.application.agent import build_graph
 from backend.application.agent.graph import route_by_intent
-from backend.application.agent.tools import create_tools
 from backend.application.orders import OrderService
 from backend.infrastructure.llm.mock import FakeChatModel
 from backend.infrastructure.persistence import JsonTicketStore, create_order_store
@@ -31,12 +30,11 @@ def test_route_by_intent_maps_five_ways() -> None:
     assert route_by_intent({"messages": [], "intent": "knowledge"}) == "knowledge"
     assert route_by_intent({"messages": [], "intent": "query"}) == "query"
     assert route_by_intent({"messages": [], "intent": "service"}) == "service"
-    assert route_by_intent({"messages": [], "intent": "logistics"}) == "logistics"
     assert route_by_intent({"messages": [], "intent": "fallback"}) == "fallback"
     assert route_by_intent({"messages": [], "intent": "unknown"}) == "fallback"
 
 
-@pytest.mark.parametrize("intent", ["knowledge", "query", "service", "logistics", "fallback"])
+@pytest.mark.parametrize("intent", ["knowledge", "query", "service", "fallback"])
 def test_requested_intent_forces_graph_branch(
     store: JsonTicketStore,
     retriever: InMemoryRetriever,
@@ -164,28 +162,6 @@ def test_service_node_emits_langgraph_custom_event(
     drafts = [payload for payload in payloads if payload.get("event") == "service_draft"]
     assert len(drafts) == 1
     assert drafts[0]["data"]["service_type"] == "维修"
-
-
-def test_logistics_branch_runs_agent_tool_loop(store: JsonTicketStore) -> None:
-    orders = OrderService(create_order_store())
-    tools = create_tools(orders)
-    graph = build_graph(
-        llm=FakeChatModel(),
-        tools=tools,
-        checkpointer=InMemorySaver(),
-        order_service=orders,
-    )
-    order_no = orders.search(limit=1)[0].order_no
-    state = graph.invoke(
-        {"messages": [HumanMessage(content=f"我的快递到哪了？订单 {order_no}")]},
-        {"configurable": {"thread_id": "logistics-loop"}},
-    )
-
-    assert state["intent"] == "logistics"
-    assert state["logistics_steps"] >= 2
-    assert any(isinstance(message, ToolMessage) for message in state["messages"])
-    assert isinstance(state["messages"][-1], AIMessage)
-    assert not state["messages"][-1].tool_calls
 
 
 def test_fallback_branch_for_complaint(store: JsonTicketStore) -> None:

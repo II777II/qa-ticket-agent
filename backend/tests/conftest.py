@@ -55,7 +55,7 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     """测试用运行时：工单写到指定文件，其余组件与生产完全一致。"""
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from backend.application.agent import build_graph, create_tools
+    from backend.application.agent import build_graph
     from backend.application.knowledge import KnowledgeService
     from backend.application.orders import OrderService
     from backend.application.tickets import TicketService
@@ -68,12 +68,10 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     store = JsonTicketStore(store_path)
     tickets = TicketService(store)
     orders_service = OrderService(create_order_store())
-    tools = create_tools(orders_service)
     retriever = InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
     checkpointer = InMemorySaver()
     graph = build_graph(
         llm=llm,
-        tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,
         order_service=orders_service,
@@ -85,7 +83,6 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
         metrics=MetricsCollector(),
         orders=orders_service,
         knowledge=KnowledgeService(create_knowledge_catalog()),
-        tools=tools,
         retriever=retriever,
         checkpointer=checkpointer,
         store=store,

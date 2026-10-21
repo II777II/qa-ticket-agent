@@ -9,12 +9,10 @@ from backend.application.runtime import AgentRuntime
 
 
 async def _collect(runtime: AgentRuntime, message: str, thread: str) -> dict:
-    collected = {"text": "", "tools": [], "orders": [], "citations": [], "errors": []}
+    collected = {"text": "", "orders": [], "citations": [], "errors": []}
     async for event, payload in ChatService(runtime).stream(message, thread):
         if event == "token":
             collected["text"] += payload["text"]
-        elif event == "tool":
-            collected["tools"].append(payload)
         elif event == "order":
             collected["orders"].extend(payload["orders"])
         elif event == "citation":
@@ -38,7 +36,7 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     assert consulted["citations"], "应命中知识库并回传引用"
     assert "[1]" in consulted["text"]
 
-    # 2. 订单查询：走 query_order，不出引用、不建单
+    # 2. 订单查询：走确定性 query，不出引用、不建单
     ordered = _turn(runtime, "帮我查询张三的订单", thread)
     assert ordered["orders"], "应返回张三的订单"
     assert not ordered["citations"]
@@ -53,7 +51,6 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
 def test_service_request_builds_draft_without_creating_ticket(isolated_runtime: AgentRuntime) -> None:
     """对话侧已不开放售后工单：即使用户要求建单，也不应创建工单。"""
     result = _turn(isolated_runtime, "帮我建个工单，商品有质量问题", "flow-2")
-    assert not any(tool["name"] == "create_ticket" for tool in result["tools"])
     assert "草稿" in result["text"]
 
 
@@ -79,7 +76,7 @@ def test_unknown_question_falls_back_without_citation(isolated_runtime: AgentRun
     assert result["text"]
 
 
-def test_order_query_uses_tool_without_rag(isolated_runtime: AgentRuntime) -> None:
+def test_order_query_uses_deterministic_branch_without_rag(isolated_runtime: AgentRuntime) -> None:
     """「查张三的订单」应走 query 分支，不引用知识库、也不建售后工单。"""
     result = _turn(isolated_runtime, "帮我查询张三的订单", "flow-order")
     assert result["orders"]

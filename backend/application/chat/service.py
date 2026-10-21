@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import time
-from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
+from typing import TYPE_CHECKING, Any, AsyncIterator
 
-from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 from backend.application.contracts import (
     EVENT_DONE,
@@ -16,7 +15,6 @@ from backend.application.contracts import (
     EVENT_ORDER,
     EVENT_START,
     EVENT_TOKEN,
-    EVENT_TOOL,
 )
 from backend.domain.intent import IntentName
 from backend.infrastructure.config import settings
@@ -41,30 +39,6 @@ def _text(value: Any) -> str:
             if isinstance(block, (str, dict))
         )
     return ""
-
-
-def _tool_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
-    if not isinstance(update, dict):
-        return
-    for output in update.values():
-        if not isinstance(output, dict):
-            continue
-        for message in output.get("messages") or []:
-            if not isinstance(message, ToolMessage):
-                continue
-            try:
-                payload = json.loads(message.content) if isinstance(message.content, str) else {}
-            except json.JSONDecodeError:
-                payload = {}
-            ok = getattr(message, "status", "success") != "error" and payload.get("ok", True)
-            yield EVENT_TOOL, {
-                "phase": "result",
-                "name": message.name or "",
-                "ok": ok,
-                "message": payload.get("message") or ("" if ok else str(message.content)[:200]),
-            }
-            if payload.get("orders"):
-                yield EVENT_ORDER, {"orders": payload["orders"]}
 
 
 class ChatService:
@@ -102,7 +76,6 @@ class ChatService:
         emitted = False
         ok = True
         intent = requested_intent or "unknown"
-        announced: set[str] = set()
 
         try:
             async for mode, payload in self._runtime.graph.astream(
@@ -117,11 +90,6 @@ class ChatService:
                     chunk, _ = payload
                     if not isinstance(chunk, AIMessageChunk):
                         continue
-                    for call in chunk.tool_calls or []:
-                        key = call.get("id") or call.get("name")
-                        if key not in announced:
-                            announced.add(key)
-                            yield EVENT_TOOL, {"phase": "call", "name": call.get("name")}
                     usage = getattr(chunk, "usage_metadata", None)
                     if isinstance(usage, dict):
                         usage_tokens = max(usage_tokens, int(usage.get("total_tokens") or 0))
@@ -138,8 +106,6 @@ class ChatService:
                             intent = data["intent"]
                         yield event, data
                 elif mode == "updates":
-                    for event, data in _tool_events(payload):
-                        yield event, data
                     for output in payload.values() if isinstance(payload, dict) else []:
                         for item in output.get("messages") or [] if isinstance(output, dict) else []:
                             if isinstance(item, AIMessage) and not isinstance(item, AIMessageChunk):

@@ -3,7 +3,6 @@
 EVENT_START = "start"
 EVENT_INTENT = "intent"
 EVENT_TOKEN = "token"
-EVENT_TOOL = "tool"
 EVENT_ORDER = "order"
 EVENT_SERVICE_DRAFT = "service_draft"
 EVENT_CITATION = "citation"
@@ -19,5 +18,4 @@ __all__ = [
     "EVENT_SERVICE_DRAFT",
     "EVENT_START",
     "EVENT_TOKEN",
-    "EVENT_TOOL",
 ]

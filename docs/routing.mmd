@@ -9,18 +9,11 @@ flowchart TD
     S1 --> S2{"缺订单号 / 联系人?"}
     S2 -- 是 --> S3["追问缺失槽位"]
     S2 -- 否 --> S4["生成工单草稿<br/>SSE: service_draft<br/>用户确认后提交"]
-    C -- logistics --> L1["抽取订单号 / 查询条件"]
-    L1 --> L2["logistics_agent<br/>bind_tools + 决策"]
-    L2 -- tools --> L3["logistics_tools<br/>query_order"]
-    L3 --> L2
-    L2 -- guard --> L4["循环上限保护"]
     C -- fallback --> F1["投诉 / 转人工 / 闲聊兜底"]
     K2 --> E(["结束"])
     Q2 --> E
     S3 --> E
     S4 --> E
-    L2 -- end --> E
-    L4 --> E
     F1 --> E
     classDef decision fill:#fff7e6,stroke:#d4a017
     class S2 decision

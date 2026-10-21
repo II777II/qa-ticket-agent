@@ -148,49 +148,19 @@ def _display_in_jupyter(png: bytes) -> None:
     display(Image(png))
 
 
-def _annotate(mermaid: str, *, tool_names: list[str], has_retriever: bool) -> str:
-    """给节点与边补上能自解释的标注。
-
-    图里只写 agent / tools 等于什么都没说：agent 内部做不做 RAG、走哪几步，
-    tools 里装了哪些工具，条件边按什么判断——这些全部从运行时读出来标上去，
-    这样图和代码不会各说各话。
-    """
-    # tools 节点：写出真实注册的工具名
-    if tool_names:
-        tools_label = "tools<br/>" + " / ".join(tool_names)
-        mermaid = re.sub(r"(?m)^(\s*)tools\(tools\)\s*$", rf'\1tools["{tools_label}"]', mermaid)
-        mermaid = re.sub(
-            r"(?m)^(\s*)logistics_tools\(logistics_tools\)\s*$",
-            rf'\1logistics_tools["logistics_tools<br/>{" / ".join(tool_names)}"]',
-            mermaid,
-        )
-
-    # agent 节点：写出内部步骤（含 RAG）
-    steps = ["agent"]
-    steps.append("检索知识库 (RAG)" if has_retriever else "未接入检索")
-    steps.extend(["命中片段拼进系统提示", "llm.bind_tools().invoke()"])
-    agent_label = "<br/>".join(steps)
-    mermaid = re.sub(r"(?m)^(\s*)agent\(agent\)\s*$", rf'\1agent["{agent_label}"]', mermaid)
-
-    # 条件边：LangGraph 不标判断条件，这里补上
-    mermaid = re.sub(r"(?m)^(\s*)agent\s*-\.->\s*__end__;", r"\1agent -.->|无 tool_calls| __end__;", mermaid)
-    mermaid = re.sub(r"(?m)^(\s*)agent\s*-\.->\s*tools;", r"\1agent -.->|有 tool_calls| tools;", mermaid)
-
-    # 五路路由主干：给节点与条件边补上中文说明
+def _annotate(mermaid: str, *, has_retriever: bool) -> str:
+    """给四路图节点与条件边补上中文说明。"""
     labels = {
         "preprocess": "preprocess<br/>清洗 / 截断",
-        "classify": "classify<br/>LLM 意图识别 + 规则兜底",
+        "classify": "classify<br/>意图识别 + 规则兜底",
         "knowledge": "knowledge<br/>RAG 问答",
         "query": "query<br/>订单查询",
         "service": "service<br/>工单草稿",
-        "logistics": "logistics<br/>物流预处理",
-        "logistics_agent": "logistics_agent<br/>bind_tools + 决策",
-        "logistics_guard": "logistics_guard<br/>循环上限保护",
         "fallback": "fallback<br/>投诉 / 闲聊 / 转人工",
     }
     for node, label in labels.items():
         mermaid = re.sub(rf"(?m)^(\s*){node}\({node}\)\s*$", rf'\1{node}["{label}"]', mermaid)
-    for branch in ("knowledge", "query", "service", "logistics", "fallback"):
+    for branch in ("knowledge", "query", "service", "fallback"):
         mermaid = re.sub(
             rf"(?m)^(\s*)classify\s*-\.->\s*{branch};",
             rf"\1classify -.->|{branch}| {branch};",
@@ -211,7 +181,6 @@ def main() -> int:
     runtime = create_runtime()
     drawable = runtime.graph.get_graph()
     out_dir = Path(args.out_dir)
-    tool_names = [getattr(tool, "name", str(tool)) for tool in runtime.tools]
     has_retriever = runtime.retriever is not None
 
     print("=== 运行时真实结构（终端 ASCII）===")
@@ -220,14 +189,13 @@ def main() -> int:
     except ImportError:
         print("（缺少 grandalf，跳过 ASCII：pip install grandalf）")
     print(f"图内节点：{' / '.join(sorted(drawable.nodes))}")
-    print(f"运行时暴露的工具：{'、'.join(tool_names) if tool_names else '无'}")
 
     if args.ascii:
         return 0
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    mermaid = _annotate(drawable.draw_mermaid(), tool_names=tool_names, has_retriever=has_retriever)
+    mermaid = _annotate(drawable.draw_mermaid(), has_retriever=has_retriever)
     mmd_path = out_dir / "graph.mmd"
     mmd_path.write_text(mermaid, encoding="utf-8")
     print(f"=== Mermaid 源已写出：{mmd_path} ===")

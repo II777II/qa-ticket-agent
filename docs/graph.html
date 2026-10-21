@@ -19,31 +19,20 @@ config:
 graph TD;
 	__start__([<p>__start__</p>]):::first
 	preprocess["preprocess<br/>清洗 / 截断"]
-	classify["classify<br/>LLM 意图识别 + 规则兜底"]
+	classify["classify<br/>意图识别 + 规则兜底"]
 	knowledge["knowledge<br/>RAG 问答"]
 	query["query<br/>订单查询"]
 	service["service<br/>工单草稿"]
-	logistics["logistics<br/>物流预处理"]
-	logistics_agent["logistics_agent<br/>bind_tools + 决策"]
-	logistics_guard["logistics_guard<br/>循环上限保护"]
 	fallback["fallback<br/>投诉 / 闲聊 / 转人工"]
-	logistics_tools["logistics_tools<br/>query_order"]
 	__end__([<p>__end__</p>]):::last
 	__start__ --> preprocess;
 	classify -.->|fallback| fallback;
 	classify -.->|knowledge| knowledge;
-	classify -.->|logistics| logistics;
 	classify -.->|query| query;
 	classify -.->|service| service;
-	logistics --> logistics_agent;
-	logistics_agent -. &nbsp;end&nbsp; .-> __end__;
-	logistics_agent -. &nbsp;guard&nbsp; .-> logistics_guard;
-	logistics_agent -. &nbsp;tools&nbsp; .-> logistics_tools;
-	logistics_tools --> logistics_agent;
 	preprocess --> classify;
 	fallback --> __end__;
 	knowledge --> __end__;
-	logistics_guard --> __end__;
 	query --> __end__;
 	service --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2
@@ -59,31 +48,20 @@ config:
 graph TD;
 	__start__([&lt;p>__start__&lt;/p>]):::first
 	preprocess["preprocess&lt;br/>清洗 / 截断"]
-	classify["classify&lt;br/>LLM 意图识别 + 规则兜底"]
+	classify["classify&lt;br/>意图识别 + 规则兜底"]
 	knowledge["knowledge&lt;br/>RAG 问答"]
 	query["query&lt;br/>订单查询"]
 	service["service&lt;br/>工单草稿"]
-	logistics["logistics&lt;br/>物流预处理"]
-	logistics_agent["logistics_agent&lt;br/>bind_tools + 决策"]
-	logistics_guard["logistics_guard&lt;br/>循环上限保护"]
 	fallback["fallback&lt;br/>投诉 / 闲聊 / 转人工"]
-	logistics_tools["logistics_tools&lt;br/>query_order"]
 	__end__([&lt;p>__end__&lt;/p>]):::last
 	__start__ --> preprocess;
 	classify -.->|fallback| fallback;
 	classify -.->|knowledge| knowledge;
-	classify -.->|logistics| logistics;
 	classify -.->|query| query;
 	classify -.->|service| service;
-	logistics --> logistics_agent;
-	logistics_agent -. &amp;nbsp;end&amp;nbsp; .-> __end__;
-	logistics_agent -. &amp;nbsp;guard&amp;nbsp; .-> logistics_guard;
-	logistics_agent -. &amp;nbsp;tools&amp;nbsp; .-> logistics_tools;
-	logistics_tools --> logistics_agent;
 	preprocess --> classify;
 	fallback --> __end__;
 	knowledge --> __end__;
-	logistics_guard --> __end__;
 	query --> __end__;
 	service --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2

@@ -168,14 +168,6 @@ function dispatch(
     case "token":
       handlers.onToken?.(String(payload.text ?? ""));
       break;
-    case "tool":
-      handlers.onTool?.({
-        phase: payload.phase === "result" ? "result" : "call",
-        name: String(payload.name ?? ""),
-        ok: payload.ok === undefined ? undefined : Boolean(payload.ok),
-        message: optionalText(payload.message),
-      });
-      break;
     case "order":
       handlers.onOrder?.((payload.orders ?? []) as unknown as OrderSummary[]);
       break;

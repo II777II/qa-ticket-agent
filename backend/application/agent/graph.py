@@ -1,4 +1,4 @@
-"""LangGraph 五路编排：确定性分支 + 物流 Agent/Tools 试点。"""
+"""LangGraph 四路编排：知识、订单、售后和兜底。"""
 
 from __future__ import annotations
 
@@ -7,9 +7,7 @@ from typing import Any, Callable, NotRequired, Sequence
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, MessagesState, StateGraph
-from langgraph.prebuilt import ToolNode
 from langgraph.types import StreamWriter
 
 from backend.application.contracts import (
@@ -32,16 +30,13 @@ from backend.domain.intent import (
 from backend.infrastructure.config import settings
 from backend.infrastructure.retrieval.in_memory import format_context
 
-INTENTS = {"knowledge", "query", "service", "logistics", "fallback"}
-MAX_LOGISTICS_STEPS = 4
+INTENTS = {"knowledge", "query", "service", "fallback"}
 TRANSFER_HINTS = ("转人工", "人工客服", "找人工", "客服电话", "投诉", "差评")
 
-CLASSIFIER_PROMPT = """把用户消息分类为 knowledge、query、service、logistics、fallback 之一。
+CLASSIFIER_PROMPT = """把用户消息分类为 knowledge、query、service、fallback 之一。
 只输出 IntentResult JSON，不要 Markdown。"""
 SYSTEM_PROMPT = """你是电商智能客服。基于【参考资料】回答并标引用编号；不要编造订单或规则。
 信息不足先追问。售后不会直接建单，只有用户在右侧确认后才提交。"""
-LOGISTICS_SYSTEM_PROMPT = """你是物流查询助手。有订单号、姓名或手机号时调用 query_order；
-根据工具结果简洁回答，不输出原始 JSON，最多调用 2 次工具。"""
 
 
 class AgentState(MessagesState):
@@ -54,7 +49,6 @@ class AgentState(MessagesState):
     retrieved: NotRequired[list[dict[str, Any]]]
     orders: NotRequired[list[dict[str, Any]]]
     draft: NotRequired[dict[str, Any]]
-    logistics_steps: NotRequired[int]
 
 
 def _text(content: Any) -> str:
@@ -250,37 +244,6 @@ def _fallback(state: AgentState) -> dict[str, Any]:
     return {"messages": [AIMessage(content=text)]}
 
 
-def _logistics_prepare(state: AgentState) -> dict[str, Any]:
-    slots = dict(state.get("slots") or {})
-    match = ORDER_NO_RE.search(state["question"])
-    if match:
-        slots["order_no"] = match.group(0).upper()
-    return {"slots": slots, "logistics_steps": 0}
-
-
-def _logistics_agent(
-    llm: BaseChatModel,
-    tools: Sequence[BaseTool],
-) -> Callable[[AgentState], dict[str, Any]]:
-    model = llm.bind_tools(list(tools)) if tools else llm
-
-    def node(state: AgentState) -> dict[str, Any]:
-        history = [item for item in state["messages"] if not isinstance(item, SystemMessage)]
-        return {
-            "messages": [model.invoke([SystemMessage(content=LOGISTICS_SYSTEM_PROMPT), *history])],
-            "logistics_steps": int(state.get("logistics_steps", 0)) + 1,
-        }
-
-    return node
-
-
-def _route_logistics(state: AgentState) -> str:
-    last = state["messages"][-1] if state.get("messages") else None
-    if not isinstance(last, AIMessage) or not last.tool_calls:
-        return "end"
-    return "guard" if int(state.get("logistics_steps", 0)) >= MAX_LOGISTICS_STEPS else "tools"
-
-
 def route_by_intent(state: AgentState) -> str:
     intent = state.get("intent", "fallback")
     return intent if intent in INTENTS else "fallback"
@@ -289,7 +252,6 @@ def route_by_intent(state: AgentState) -> str:
 def build_graph(
     *,
     llm: BaseChatModel,
-    tools: Sequence[BaseTool] = (),
     retriever: Any | None = None,
     checkpointer: Any | None = None,
     order_service: OrderService | None = None,
@@ -302,22 +264,9 @@ def build_graph(
         "knowledge": _knowledge(llm, retriever, system_prompt),
         "query": _query(order_service),
         "service": _service,
-        "logistics": _logistics_prepare,
-        "logistics_agent": _logistics_agent(llm, tools),
-        "logistics_guard": lambda _state: {
-            "messages": [AIMessage(content="物流查询步骤过多，请补充订单号后重试。")]
-        },
         "fallback": _fallback,
     }.items():
         graph.add_node(name, node)
-    routes: dict[str, Any] = {"end": END, "guard": "logistics_guard"}
-    if tools:
-        graph.add_node("logistics_tools", ToolNode(list(tools)))
-        graph.add_edge("logistics_tools", "logistics_agent")
-        routes["tools"] = "logistics_tools"
-    else:
-        routes["tools"] = END
-
     graph.add_edge(START, "preprocess")
     graph.add_edge("preprocess", "classify")
     graph.add_conditional_edges(
@@ -325,9 +274,6 @@ def build_graph(
         route_by_intent,
         {name: name for name in INTENTS},
     )
-    graph.add_edge("logistics", "logistics_agent")
-    graph.add_conditional_edges("logistics_agent", _route_logistics, routes)
-    graph.add_edge("logistics_guard", END)
     for name in ("knowledge", "query", "service", "fallback"):
         graph.add_edge(name, END)
     return graph.compile(checkpointer=checkpointer)

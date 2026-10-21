@@ -1,4 +1,4 @@
-"""接口用例：健康检查、能力查询、五路分支与 SSE 事件契约。"""
+"""接口用例：健康检查、能力查询、四路分支与 SSE 事件契约。"""
 
 from __future__ import annotations
 
@@ -7,12 +7,10 @@ import json
 
 import httpx
 import pytest
-from langchain_core.messages import ToolMessage
 
 from backend.api.app import app as api_app
 from backend.api.routes import dialogue as dialogue_routes
 from backend.api.routes import service as service_routes
-from backend.application.chat.service import _tool_events
 from backend.application.runtime import AgentRuntime
 
 
@@ -76,8 +74,7 @@ def test_agent_info_reports_capabilities(isolated_runtime: AgentRuntime) -> None
     assert body["kb_chunks"] >= 100
     assert body["orders"] == 50
     assert body["kb_articles"] == 50
-    assert "tool:query_order" in body["extensions"]
-    assert "tool:create_ticket" not in body["extensions"]
+    assert "compose:docker/docker-compose.yml" in body["extensions"]
     assert body["tickets"] == 0
     assert body["git_sha"]  # 界面要显示版本号
 
@@ -104,7 +101,6 @@ def test_openapi_mounts_chat_and_five_branch_routes() -> None:
     assert paths["/branch/query"]["post"]
     assert paths["/branch/service"]["post"]
     assert paths["/branch/service/confirm"]["post"]
-    assert paths["/branch/logistics"]["post"]
     assert paths["/branch/fallback"]["post"]
     assert "/api/tickets" not in paths
 
@@ -117,7 +113,6 @@ def test_dialogue_router_owns_chat_and_intent_branches_only() -> None:
         "/branch/knowledge",
         "/branch/query",
         "/branch/service",
-        "/branch/logistics",
         "/branch/fallback",
     }
     assert service_routes.router is not dialogue_routes.router
@@ -129,7 +124,6 @@ def test_openapi_separates_intent_branches_and_service_actions() -> None:
         "/branch/knowledge",
         "/branch/query",
         "/branch/service",
-        "/branch/logistics",
         "/branch/fallback",
     ):
         assert paths[path]["post"]["tags"] == ["intent-branches"]
@@ -156,22 +150,6 @@ def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
     assert kpis["avg_latency_ms"] > 0
     assert kpis["avg_first_token_ms"] >= 0
     assert summary["by_intent"][0]["intent"] == "knowledge"
-
-
-def test_tool_order_result_emits_order_event() -> None:
-    tool_message = ToolMessage(
-        content=json.dumps(
-            {
-                "ok": True,
-                "orders": [{"order_no": "SO202609150020", "status": "待发货"}],
-            }
-        ),
-        name="query_order",
-        tool_call_id="call-order-result",
-    )
-    events = list(_tool_events({"query": {"messages": [tool_message]}}))
-    assert events[-1][0] == "order"
-    assert events[-1][1]["orders"][0]["order_no"] == "SO202609150020"
 
 
 def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
@@ -217,8 +195,7 @@ def test_service_request_does_not_create_ticket_before_confirmation(isolated_run
     """service 分支只生成草稿，不直接创建工单。"""
     _prepare(isolated_runtime)
     events = asyncio.run(_stream_chat("帮我建个售后工单，商品有质量问题，联系我 wang.wu@corp.com", "api-3"))
-    tools = [(payload["phase"], payload["name"]) for name, payload in events if name == "tool"]
-    assert not any(name == "create_ticket" for _, name in tools)
+    assert "service_draft" in [name for name, _ in events]
     assert isolated_runtime.tickets.count() == 0
 
 
@@ -342,7 +319,6 @@ def test_service_confirmation_rejects_unknown_order(isolated_runtime: AgentRunti
         ("/branch/knowledge", "knowledge"),
         ("/branch/query", "query"),
         ("/branch/service", "service"),
-        ("/branch/logistics", "logistics"),
         ("/branch/fallback", "fallback"),
     ],
 )
@@ -377,22 +353,3 @@ def test_explicit_branch_does_not_leak_into_next_chat_request(isolated_runtime: 
     intent = [payload for name, payload in events if name == "intent"][-1]
     assert intent["intent"] == "knowledge"
     assert intent["reason"] != "由显式 HTTP 分支路由指定"
-
-
-def test_logistics_chat_uses_agent_and_query_order_tool(isolated_runtime: AgentRuntime) -> None:
-    _prepare(isolated_runtime)
-    order_no = isolated_runtime.orders.search(limit=1)[0].order_no
-    events = asyncio.run(
-        _stream_chat(
-            f"我的快递到哪了？订单 {order_no}",
-            "api-logistics",
-        )
-    )
-
-    names = [name for name, _ in events]
-    intent = [payload for name, payload in events if name == "intent"][-1]
-    assert intent["intent"] == "logistics"
-    assert "tool" in names
-    assert "order" in names
-    text = "".join(payload["text"] for name, payload in events if name == "token")
-    assert order_no in text

@@ -22,7 +22,6 @@ from backend.application.contracts import (
     EVENT_ERROR,
     EVENT_START,
     EVENT_TOKEN,
-    EVENT_TOOL,
 )
 from backend.application.runtime import AgentRuntime, create_runtime
 from backend.infrastructure.config import settings
@@ -50,12 +49,6 @@ async def run_once(
             print(f"[{tag}] ", end="", flush=True)
         elif event == EVENT_TOKEN:
             print(payload["text"], end="", flush=True)
-        elif event == EVENT_TOOL:
-            if payload.get("phase") == "call":
-                print(f"\n  <调用工具> {payload.get('name')}", flush=True)
-            else:
-                flag = "ok" if payload.get("ok") else "失败"
-                print(f"  <工具返回> {payload.get('name')} [{flag}] {payload.get('message', '')}", flush=True)
         elif event == EVENT_CITATION:
             print(
                 f"  <引用 [{payload.get('index')}]> {payload.get('source')} · {payload.get('title')}"
@@ -78,7 +71,7 @@ async def main() -> int:
     info = runtime.describe()
     print(
         f"provider={info['provider']}  model={info['model'] or '(内置)'}  "
-        f"tools={len(info['tools'])}  memory={info['checkpointer'] or '未接入'}  "
+        f"memory={info['checkpointer'] or '未接入'}  "
         f"tickets={info['tickets']}  "
         f"thread={args.thread}"
     )

@@ -8,13 +8,6 @@ export interface StartEvent {
   mock: boolean;
 }
 
-export interface ToolEvent {
-  phase: "call" | "result";
-  name: string;
-  ok?: boolean;
-  message?: string;
-}
-
 /** RAG 引用：模型这句回答的依据来自哪篇文档的哪一小节 */
 export interface CitationEvent {
   index: number;
@@ -30,7 +23,7 @@ export interface ErrorEvent {
 }
 
 export interface IntentEvent {
-  intent: "knowledge" | "query" | "service" | "logistics" | "fallback";
+  intent: "knowledge" | "query" | "service" | "fallback";
   confidence: number;
   reason: string;
   slots: Record<string, string>;
@@ -86,22 +79,12 @@ export interface AgentInfo {
   git_date: string;
 }
 
-/** 一条工具调用在界面上的展示状态 */
-export interface ToolCallView {
-  key: string;
-  name: string;
-  phase: "call" | "result";
-  ok?: boolean;
-  message?: string;
-}
-
 export interface ChatMessage {
   key: string;
   role: Role;
   content: string;
   loading?: boolean;
   error?: string;
-  tools: ToolCallView[];
   orders: OrderSummary[];
   citations: CitationEvent[];
   intent?: IntentEvent;
@@ -111,7 +94,6 @@ export interface ChatMessage {
 export interface StreamHandlers {
   onStart?: (event: StartEvent) => void;
   onToken?: (text: string) => void;
-  onTool?: (event: ToolEvent) => void;
   onOrder?: (orders: OrderSummary[]) => void;
   onIntent?: (event: IntentEvent) => void;
   onServiceDraft?: (draft: ServiceDraft) => void;
@@ -238,7 +220,7 @@ export interface OrderRecord {
   source_label: string;
 }
 
-/** query_order 工具返回的订单摘要（order 事件载荷） */
+/** query 分支产生的订单摘要（order 事件载荷） */
 export interface OrderSummary {
   order_no: string;
   status: string;

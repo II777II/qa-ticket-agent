@@ -12,8 +12,6 @@ import type {
   IntentEvent,
   OrderSummary,
   ServiceDraft,
-  ToolCallView,
-  ToolEvent,
 } from "../types";
 
 function newKey(prefix: string): string {
@@ -21,22 +19,7 @@ function newKey(prefix: string): string {
 }
 
 function emptyMessage(role: ChatMessage["role"], key: string): ChatMessage {
-  return { key, role, content: "", tools: [], orders: [], citations: [] };
-}
-
-/** 工具事件落成界面条目：call 新建一条，result 挂到同名的那条上 */
-function mergeTool(tools: ToolCallView[], event: ToolEvent): ToolCallView[] {
-  if (event.phase === "call") {
-    return [...tools, { key: newKey("tool"), name: event.name, phase: "call" }];
-  }
-  const index = [...tools].reverse().findIndex((tool) => tool.name === event.name && tool.phase === "call");
-  if (index < 0) {
-    return [...tools, { key: newKey("tool"), name: event.name, phase: "result", ok: event.ok, message: event.message }];
-  }
-  const target = tools.length - 1 - index;
-  return tools.map((tool, position) =>
-    position === target ? { ...tool, phase: "result", ok: event.ok, message: event.message } : tool,
-  );
+  return { key, role, content: "", orders: [], citations: [] };
 }
 
 function mergeOrders(current: OrderSummary[] = [], incoming: OrderSummary[]): OrderSummary[] {
@@ -92,8 +75,6 @@ export function useChat(): UseChatResult {
           {
             onToken: (token) =>
               patch((message) => ({ ...message, content: message.content + token, loading: false })),
-            onTool: (event) =>
-              patch((message) => ({ ...message, loading: false, tools: mergeTool(message.tools, event) })),
             onOrder: (orders) =>
               patch((message) => ({ ...message, loading: false, orders: mergeOrders(message.orders, orders) })),
             onIntent: (intent: IntentEvent) => patch((message) => ({ ...message, intent })),

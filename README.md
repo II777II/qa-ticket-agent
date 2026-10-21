@@ -12,12 +12,12 @@
 
 | 层级 | 选型 | POC 实现 |
 | --- | --- | --- |
-| 前端 | React + TypeScript + Vite + Ant Design X | 已就绪（Bubble / Sender / ThoughtChain / Welcome） |
+| 前端 | React + TypeScript + Vite + Ant Design X | 已就绪（Bubble / Sender / Welcome） |
 | 后端 | Python 3.11 + FastAPI，SSE 流式 | 已就绪 |
-| 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 意图分类 + 五路分支） | 已就绪；logistics 使用 Agent/Tools |
+| 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 意图分类 + 四路分支） | 已就绪 |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
-| 工具调用 | 只暴露 `query_order` 订单查询工具 | 已就绪 |
+| 工具调用 | POC 不向模型暴露工具；订单走确定性 query 节点 | 已就绪 |
 | 简易 RAG | 进程内检索 + 50 篇电商 HTML + 引用 | 已就绪（HTML 按 h2 切块） |
 | 订单查询 | JSON 演示数据（50 单，按 Postgres 表形状） | 已就绪（`#/orders`） |
 | 知识库 | 50 篇 HTML 文章 + 分类/标签目录 | 已就绪（`#/kb`） |
@@ -46,7 +46,7 @@ python -m backend.scripts.cli_chat --once "帮我查询张三的订单"
 # 走一遍「知识库问答 → 订单查询 → 多轮追问」（演示模式下也能跑）
 python -m backend.scripts.cli_chat
 #   你 > 退款多久到账                          <- 知识库问答，带引用
-#   你 > 帮我查询张三的订单                    <- 调 query_order，不建单
+#   你 > 帮我查询张三的订单                    <- 走确定性 query，不建单
 #   你 > 那退款失败会怎么处理                  <- 多轮追问
 
 # 后端：起 HTTP 服务（/docs 里有交互式接口文档）
@@ -97,7 +97,6 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | POST | `/branch/query` | 强制进入订单查询分支（SSE） |
 | POST | `/branch/service` | 强制进入售后业务草稿分支（SSE） |
 | POST | `/branch/service/confirm` | 用户确认后提交业务办理并创建售后工单 |
-| POST | `/branch/logistics` | 强制进入物流 Agent + Tools 分支（SSE） |
 | POST | `/branch/fallback` | 强制进入兜底分支（SSE） |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
@@ -124,7 +123,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 | `#/` | 首页 | 只有对话框：居中输入框 + 快捷问题 + 底部版本号 |
 | `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，引用与订单标签渲染在气泡底部 |
 | `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出**这一轮**问答的 Top-K 检索命中（来源、小节、相关度、片段） |
-| `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** `query_order` 查到的订单（单号/状态/金额/商品/收货人） |
+| `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** query 分支查到的订单（单号/状态/金额/商品/收货人） |
 | `#/chat?panel=service` | 对话 + 业务办理 | 右侧编辑槽位、查看缺失提醒，并在核对后确认提交 |
 | `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
 | `#/kb` | 知识库检索 | 8 个分类浏览 50 篇 HTML；关键词检索 + RAG 命中片段，点击打开 HTML 原文 |
@@ -137,16 +136,15 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 点历史消息里的引用/订单/业务草稿标签，面板会切回那一轮的数据。业务办理必须先由用户核对并确认，
 前端不会在生成草稿时自动创建工单。
 
-## 对话路由（五路）
+## 对话路由（四路）
 
-一轮对话在 LangGraph 里固定走：`preprocess → classify → 五路分支`。
+一轮对话在 LangGraph 里固定走：`preprocess → classify → 四路分支`。
 
 | 意图 | HTTP 分支 | 判定（规则兜底） | 分支行为 | 前端事件 |
 | --- | --- | --- | --- | --- |
 | `knowledge` 知识咨询 | `POST /branch/knowledge` | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
 | `query` 订单查询 | `POST /branch/query` | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `OrderService`，不检索 | `order` + `token` |
 | `service` 业务办理 | `POST /branch/service` | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 识别槽位、生成可编辑草稿并提示缺失项；确认后提交 | `service_draft` + `token` |
-| `logistics` 物流查询 | `POST /branch/logistics` | 物流 / 快递 / 配送 / 派送 / 签收 / 包裹 | 物流预处理 → Agent → `query_order` tools → Agent | `tool` + `order` + `token` |
 | `fallback` 兜底 | `POST /branch/fallback` | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
 
 分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
@@ -159,7 +157,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 97 个用例，约 9 秒
+python -m pytest            # 84 个用例，约 8 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -175,8 +173,7 @@ python -m backend.scripts.draw_graph --png --html
 
 从运行时图导出（所以永远和 `build_graph()` 的实际结构一致）：终端 ASCII 图、`docs/graph.png`、
 `docs/graph.mmd`（Mermaid 源）、`docs/graph.html`。
-图上的标注也是从运行时读出来的——`agent` 节点会写明「检索知识库 (RAG) → 拼进系统提示 → 调模型」，
-`tools` 节点会列出实际注册的工具名，条件边会标出 `有/无 tool_calls`。
+图上的节点与条件边标注由运行时结构和配置生成。
 PNG 先试 mermaid.ink，失败就用本机 Chrome/Edge 离线渲染并裁掉空白（`--local` 可强制离线）。
 在 Jupyter 里可以 `from IPython.display import Image, display; display(Image(graph.get_graph().draw_mermaid_png()))`，
 细节见 [docs/architecture.md](docs/architecture.md)。
@@ -218,7 +215,7 @@ backend/
   domain/              领域层：工单实体（models.py）、业务规则（rules.py）、领域异常（errors.py）
   application/         应用层
     runtime.py         装配：调工厂拼出运行时（不含业务动作）
-    agent/             graph.py（意图、提示词、五路与物流循环）、tools.py（工具适配）
+    agent/             graph.py（意图、提示词与四路编排）
     chat/service.py    用例：一轮对话（驱动图 + 翻译 token/order/service_draft/citation 事件）
     contracts/         跨 Agent/Chat/API 的对话事件契约（EVENT_*）
     tickets/service.py 用例：确认后创建工单与计数
@@ -274,7 +271,6 @@ app
 │       ├── POST /branch/knowledge
 │       ├── POST /branch/query
 │       ├── POST /branch/service
-│       ├── POST /branch/logistics
 │       └── POST /branch/fallback
 └── service-actions router
     └── POST /branch/service/confirm
