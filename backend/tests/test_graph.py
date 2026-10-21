@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
@@ -29,46 +27,6 @@ def test_route_by_intent_maps_three_ways() -> None:
     assert route_by_intent({"messages": [], "intent": "write"}) == "write"
     assert route_by_intent({"messages": [], "intent": "human"}) == "human"
     assert route_by_intent({"messages": [], "intent": "unknown"}) == "human"
-
-
-@pytest.mark.parametrize("intent", ["read", "write", "human"])
-def test_requested_intent_forces_graph_branch(
-    store: JsonTicketStore,
-    retriever: InMemoryRetriever,
-    intent: str,
-) -> None:
-    graph = _build(store, retriever)
-    state = graph.invoke(
-        {
-            "messages": [HumanMessage(content="退款多久到账？")],
-            "requested_intent": intent,
-        },
-        {"configurable": {"thread_id": f"forced-{intent}"}},
-    )
-    assert state["intent"] == intent
-
-
-def test_next_turn_clears_requested_intent(
-    store: JsonTicketStore,
-    retriever: InMemoryRetriever,
-) -> None:
-    graph = _build(store, retriever)
-    config = {"configurable": {"thread_id": "forced-reset"}}
-    graph.invoke(
-        {
-            "messages": [HumanMessage(content="退款多久到账？")],
-            "requested_intent": "human",
-        },
-        config,
-    )
-    state = graph.invoke(
-        {
-            "messages": [HumanMessage(content="退款多久到账？")],
-            "requested_intent": None,
-        },
-        config,
-    )
-    assert state["intent"] == "read"
 
 
 def test_read_branch_uses_knowledge_tool(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:

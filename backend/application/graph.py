@@ -13,7 +13,6 @@ from langgraph.types import StreamWriter
 from backend.domain.core import (
     HUMAN_HINTS,
     ORDER_NO_RE,
-    IntentName,
     IntentResult,
     extract_service_slots,
     extract_user_id,
@@ -34,7 +33,6 @@ SYSTEM_PROMPT = "你是电商智能客服。基于【参考资料】回答并标
 
 class AgentState(MessagesState):
     question: NotRequired[str]
-    requested_intent: NotRequired[IntentName | None]
     intent: NotRequired[str]
     slots: NotRequired[dict[str, str]]
     retrieved: NotRequired[list[dict[str, Any]]]
@@ -68,13 +66,11 @@ def _preprocess(state: AgentState) -> dict[str, Any]:
 
 def _classify(llm: BaseChatModel) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
     def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
-        requested = state.get("requested_intent")
-        if requested in INTENTS:
-            result = IntentResult(intent=requested, confidence=1.0, reason="由显式 HTTP 分支路由指定")
-        elif is_order_query(state["question"]):
-            result = rule_classify(state["question"])
-        else:
-            result = _intent(state["question"], llm)
+        result = (
+            rule_classify(state["question"])
+            if is_order_query(state["question"])
+            else _intent(state["question"], llm)
+        )
         _emit(writer, EVENT_INTENT, {
             "intent": result.intent,
             "confidence": result.confidence,

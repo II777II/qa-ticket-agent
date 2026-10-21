@@ -95,16 +95,12 @@ read、write、human 三类都是明确、可测试的执行路径；read 内部
 main app
 └── api/routes.py router
     ├── POST /chat
-    ├── POST /branch/read
-    ├── POST /branch/write
-    ├── POST /branch/human
     ├── POST /branch/service/confirm
     └── POST /api/llm/config
 ```
 
-`app.py` 负责应用组装和生命周期，`routes.py` 负责 HTTP/SSE 路由。`/branch/*`
-SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确认后的业务写操作，
-标记为 `service-actions`，不再混入 Agent 或意图分支分组。
+`app.py` 负责应用组装和生命周期，`routes.py` 负责 HTTP/SSE 路由。`/chat` 是唯一
+对话入口；`/branch/service/confirm` 是用户确认后的业务写操作，标记为 `service-actions`。
 
 模型 API Key 通过前端右下角设置窗口提交到 `/api/llm/config`。后端先创建模型并发起最小
 验证调用，成功后重建 LangGraph；Key 只存在于当前进程内存，不写入 `.env`、浏览器存储或日志。
@@ -132,8 +128,7 @@ SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确�
 3. `preprocess` 清理问题，`classify` 执行 LLM 结构化意图识别，失败时退回规则；
 4. `route_by_intent` 只会进入 read / write / human 之一；
 5. `read` 按规则选择 `order_query` 或 `knowledge_search`，不进行第二次模型调用；
-6. `/branch/{intent}` 是三个显式 HTTP 入口，会锁定对应高层意图并跳过再次分类；
-7. 过程中向前端推事件：
+6. 过程中向前端推事件：
 
 Langfuse 启用时，ChatService 会把 `CallbackHandler` 注入 LangGraph 调用配置，并将
 `thread_id` 作为 `langfuse_session_id`；未启用或初始化失败时不注入 callback，主链路继续运行。
@@ -148,10 +143,10 @@ Langfuse 启用时，ChatService 会把 `CallbackHandler` 注入 LangGraph 调�
 | `citation` | 本轮检索命中 | `index` / `source` / `title` / `snippet` / `score` |
 | `done` / `error` | 一轮结束 | —— |
 
-8. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
-9. 前端把 `order` / `citation` / `service_draft` 渲染成气泡底部标签，并切换右侧对应面板；
-10. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
-11. 对话事件契约不包含工单写入；工单只在 service-actions 的 JSON 响应中返回。
+7. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
+8. 前端把 `order` / `citation` / `service_draft` 渲染成气泡底部标签，并切换右侧对应面板；
+9. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
+10. 对话事件契约不包含工单写入；工单只在 service-actions 的 JSON 响应中返回。
 
 SSE 响应由 FastAPI 内置的 `EventSourceResponse + ServerSentEvent` 编码；
 路由函数以异步生成器产出 `ServerSentEvent`，并通过 `response_class=EventSourceResponse`

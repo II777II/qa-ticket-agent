@@ -118,35 +118,26 @@ def test_ticket_routes_are_not_mounted(isolated_runtime: AgentRuntime) -> None:
     assert asyncio.run(_get("/api/tickets/TK-19700101-0001")).status_code == 404
 
 
-def test_openapi_mounts_chat_and_three_branch_routes() -> None:
+def test_openapi_mounts_single_chat_entry() -> None:
     paths = api_app.openapi()["paths"]
     assert "/chat" in paths
-    assert paths["/branch/read"]["post"]
-    assert paths["/branch/write"]["post"]
     assert paths["/branch/service/confirm"]["post"]
-    assert paths["/branch/human"]["post"]
+    assert "/branch/read" not in paths
+    assert "/branch/write" not in paths
+    assert "/branch/human" not in paths
     assert "/api/tickets" not in paths
 
 
-def test_dialogue_router_owns_chat_and_intent_branches_only() -> None:
-    """单一聚合路由保留对话入口和三类意图入口。"""
+def test_dialogue_router_has_no_debug_branches() -> None:
+    """正式对话仅保留统一入口，显式意图调试路由不再暴露。"""
     paths = {route.path for route in router.routes}
-    assert {
-        "/chat",
-        "/branch/read",
-        "/branch/write",
-        "/branch/human",
-    }.issubset(paths)
+    assert "/chat" in paths
+    assert not {"/branch/read", "/branch/write", "/branch/human"} & paths
 
 
-def test_openapi_separates_intent_branches_and_service_actions() -> None:
+def test_openapi_separates_chat_and_service_actions() -> None:
     paths = api_app.openapi()["paths"]
-    for path in (
-        "/branch/read",
-        "/branch/write",
-        "/branch/human",
-    ):
-        assert paths[path]["post"]["tags"] == ["intent-branches"]
+    assert paths["/chat"]["post"]["tags"] == ["chat"]
     assert paths["/branch/service/confirm"]["post"]["tags"] == ["service-actions"]
 
 
@@ -209,7 +200,7 @@ def test_builtin_event_source_response_headers(isolated_runtime: AgentRuntime) -
         async with _client() as client:
             async with client.stream(
                 "POST",
-                "/branch/human",
+                "/chat",
                 json={"message": "你好", "thread_id": "sse-headers"},
             ) as response:
                 return (
@@ -347,23 +338,21 @@ def test_service_confirmation_rejects_unknown_order(isolated_runtime: AgentRunti
 
 
 @pytest.mark.parametrize(
-    ("path", "expected_intent"),
+    ("message", "expected_intent"),
     [
-        ("/branch/read", "read"),
-        ("/branch/write", "write"),
-        ("/branch/human", "human"),
+        ("退款多久到账？", "read"),
+        ("帮我建个售后工单，商品有质量问题，联系我 zhang.san@corp.com", "write"),
+        ("我要投诉", "human"),
     ],
 )
-def test_explicit_branch_routes_force_intent(
+def test_chat_auto_classifies_three_ways(
     isolated_runtime: AgentRuntime,
-    path: str,
+    message: str,
     expected_intent: str,
 ) -> None:
-    """同一句显式分支入口必须锁定对应的高层意图。"""
+    """统一 /chat 入口自动分流到三类意图。"""
     _prepare(isolated_runtime)
-    events = asyncio.run(
-        _stream_post(path, "退款多久到账？", f"branch-{expected_intent}")
-    )
+    events = asyncio.run(_stream_chat(message, f"auto-{expected_intent}"))
 
     names = [name for name, _ in events]
     intents = [payload for name, payload in events if name == "intent"]
@@ -371,17 +360,3 @@ def test_explicit_branch_routes_force_intent(
     assert names[-1] == "done"
     assert "error" not in names
     assert intents[-1]["intent"] == expected_intent
-    assert intents[-1]["confidence"] == 1.0
-    assert "HTTP" in intents[-1]["reason"]
-
-
-def test_explicit_branch_does_not_leak_into_next_chat_request(isolated_runtime: AgentRuntime) -> None:
-    """显式分支写下的强制意图，必须被同一 thread_id 的 /chat 自动分类清除。"""
-    _prepare(isolated_runtime)
-    thread_id = "branch-reset"
-    asyncio.run(_stream_post("/branch/human", "退款多久到账？", thread_id))
-    events = asyncio.run(_stream_chat("退款多久到账？", thread_id))
-
-    intent = [payload for name, payload in events if name == "intent"][-1]
-    assert intent["intent"] == "read"
-    assert intent["reason"] != "由显式 HTTP 分支路由指定"

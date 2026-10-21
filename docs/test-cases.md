@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（90 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、40 条固定评测集、Token usage 聚合、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
+- **自动化用例**（85 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、40 条固定评测集、Token usage 聚合、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 90 passed in ~3s
+python -m pytest              # 85 passed in ~3s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -45,8 +45,6 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | 编号 | 用例 | 步骤 | 预期 |
 | --- | --- | --- | --- |
 | G-01 | 三类条件边 | 输入 read/write/human 与一个未知 intent | 分别去 read / write / human |
-| G-02 | 显式意图强制分支 | 构造 `requested_intent` 调图 | 三个值分别锁定对应高层分支，不再执行自动分类 |
-| G-03 | 强制状态清理 | 同一 thread 先强制 human，下一轮传 None | 下一轮恢复自动分类为 read |
 | G-04 | 引用写回 state | 问「退款多久到账」 | `retrieved` 非空，第一条来源 `KB-EC-0020.html`，片段长度 ≤ 160 |
 | G-05 | read 的订单工具跳过 RAG | 问「查询用户 10019 的订单」 | intent=read、`orders` 非空、`retrieved == []` |
 | G-06 | 售后草稿与缺失槽位 | 说「商品损坏了，帮我建个工单」 | 返回草稿、识别联系人，提示订单号和业务类型缺失，存储仍为 0 张 |
@@ -66,21 +64,19 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-02 | 能力查询 | `GET /api/agent-info` | 200，kb_documents=50、orders=50，扩展信息含 Compose 预留 |
 | A-03 | 根路径 | `GET /` | 200，Content-Type 为 html（已构建）或 json（未构建） |
 | A-04 | 旧工单接口已卸载 | `GET /api/tickets` 与详情路径 | 均返回 404 |
-| A-05 | 路由装配 | 读取 OpenAPI paths | 含 `/chat`、三个高层 `/branch/*` 与 `/branch/service/confirm`，不含 `/api/tickets` |
+| A-05 | 路由装配 | 读取 OpenAPI paths | 含唯一对话入口 `/chat` 与 `/branch/service/confirm`，不含显式意图分支和 `/api/tickets` |
 | A-06 | SSE 事件契约（咨询） | 流式问「退款多久到账」 | 序列以 start 开头、done 结尾，含 token 与 citation，不含 tool，正文含 `[1]` |
 | A-07 | 对话不建工单 | 流式说「帮我建个工单」 | 只生成 service_draft，不创建工单 |
 | A-08 | 空消息拦截 | `POST /chat` 传空 message | 422，不进图 |
 | A-09 | 订单 SSE | `POST /chat` 问「查询用户 10002 的订单」 | intent=read，含 order、无 citation |
-| A-10 | 三路显式 HTTP 入口 | 同一句分别请求 `/branch/read`、`write`、`human` | intent 等于 read / write / human |
-| A-11 | 分支状态不串线 | 同一 thread 先走 `/branch/human`，再走 `/chat` | `/chat` 清除强制意图并自动分流到 read |
 | A-12 | 业务草稿 SSE | 问包含订单号、换货、联系人的售后问题 | 收到 `service_draft`，四个槽位完整，ready=true，未写工单 |
 | A-13 | 确认后建单 | 提交 `/branch/service/confirm` | 200，返回 TK 单号并新增工单；重复提交返回原工单 |
 | A-14 | 无效订单拒绝 | 提交不存在的订单号 | 404，不创建工单 |
-| A-15 | 内置 SSE 响应头 | 请求任一 SSE 分支 | `Content-Type=text/event-stream`，`X-Accel-Buffering=no` |
+| A-15 | 内置 SSE 响应头 | 请求 `/chat` | `Content-Type=text/event-stream`，`X-Accel-Buffering=no` |
 | A-16 | SSE 上游异常 | ChatService 流抛出 RuntimeError | 已发送的事件保留，末尾增加终止性 `error`，不追加 `done` |
 | A-17 | SSE 序列化异常 | 事件 payload 含不可 JSON 序列化对象 | 转成 `error` 事件，连接不抛未处理异常 |
 | A-19 | 意图指标 | 完成一轮知识问答后读取指标 | `by_intent` 含 read，统计 calls/tokens/延迟/成功率 |
-| A-20 | OpenAPI 语义分组 | 检查三路 SSE 与业务确认 tags | 分支统一为 intent-branches，确认接口为 service-actions |
+| A-20 | OpenAPI 语义分组 | 检查对话和业务确认 tags | `/chat` 为 chat，确认接口为 service-actions |
 | A-21 | API Key 配置 | 提交模拟模型 Key | 验证成功、运行时不回显 Key、模型信息更新 |
 | A-22 | 固定评测集 | 请求 `/api/evaluation/summary` | 返回 40 条结果、意图/工具/RAG 三项指标和明细 |
 
@@ -118,7 +114,6 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | M-10 | 窄屏布局 | 窗口宽度 < 1100px | 知识库/订单面板移到对话下方，不横向滚动 |
 | M-11 | 后端未启动 | 关掉后端后刷新页面 | 顶部出现「连不上后端」提示并给出启动命令，页面不白屏 |
 | M-12 | 知识库结果面板 | 提问后点顶栏「知识库」；再点历史消息里的引用标签 | 右侧只显示**当前这一轮**的命中；点旧消息引用后切到那一轮结果；点「重查」重新检索本轮回题 |
-| M-13 | 分支接口联调 | 分别直接调用三个 `/branch/*` | 均返回 SSE，intent 固定为对应高层分支；页面仍通过 `/chat` 正常工作 |
 | M-14 | 后台指标页 | 跑几轮对话后打开 `#/admin` | Token、首字延迟、请求量、错误率和意图明细有数据；刷新按钮生效 |
 | M-15 | 版本徽标 | 查看首页右上角/侧栏底部 | 显示当前 git 短 hash，可与提交记录对照 |
 | M-16 | 订单查询页 | 打开 `#/orders`，分别输入订单号和 user_id | 只按精确订单号或 user_id 查询；右侧显示地址、商品明细、金额、支付/退款与状态时间线 |

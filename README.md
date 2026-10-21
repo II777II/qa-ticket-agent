@@ -93,10 +93,7 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | POST | `/chat` | 统一流式对话入口（SSE），自动执行 LLM 意图识别并分流 |
-| POST | `/branch/read` | 强制进入只读分支；内部规则选择知识库或订单工具（SSE） |
-| POST | `/branch/write` | 强制进入售后业务草稿分支（SSE） |
 | POST | `/branch/service/confirm` | 用户确认后提交业务办理并创建售后工单 |
-| POST | `/branch/human` | 强制进入人工/兜底分支（SSE） |
 | POST | `/api/llm/config` | 设置 DeepSeek/OpenAI API Key，验证后动态切换模型 |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
@@ -108,9 +105,8 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | GET | `/api/orders?order_no=&user_id=` | 电商订单查询；必须提供精确订单号或 user_id |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
-`/branch/read`、`/branch/write`、`/branch/human` 暂时保留，仅用于接口测试、
-联调和演示强制分流。前端正式对话统一使用 `/chat`，由分类器自动选择三类意图。
-`/branch/service/confirm` 是用户确认后的业务动作，不属于调试分支。
+前端正式对话只使用 `/chat`，由分类器自动选择 `read / write / human`。
+`/branch/service/confirm` 是用户确认后的正式业务动作。
 
 模型切换调用 `AgentRuntime.reconfigure_llm()`：锁内重新编译 LangGraph 并原子替换
 `graph/llm/provider/model`。切换前已开始的流继续使用旧图，新请求通过 `snapshot()` 使用新图。
@@ -148,15 +144,14 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 
 一轮对话在 LangGraph 里固定走：`preprocess → classify → read / write / human`。
 
-| 意图 | HTTP 分支 | 判定（规则兜底） | 分支行为 | 前端事件 |
+| 意图 | HTTP 入口 | 判定（规则兜底） | 分支行为 | 前端事件 |
 | --- | --- | --- | --- | --- |
-| `read` 只读查询 | `POST /branch/read` | 排除投诉和明确业务动作后的查询请求 | 精确订单号或 user_id 调用 `order_query`；其他调用 `knowledge_search` | `order` 或 `citation` + `token` |
-| `write` 业务办理 | `POST /branch/write` | 建单、申请退换修、办理售后等明确动作 | 识别槽位、生成可编辑草稿；确认后提交 | `service_draft` + `token` |
-| `human` 人工/兜底 | `POST /branch/human` | 投诉、转人工、问候、闲聊及未知意图 | 兜底话术；演示版未接人工坐席 | `token` |
+| `read` 只读查询 | `POST /chat` | 排除投诉和明确业务动作后的查询请求 | 精确订单号或 user_id 调用 `order_query`；其他调用 `knowledge_search` | `order` 或 `citation` + `token` |
+| `write` 业务办理 | `POST /chat` | 建单、申请退换修、办理售后等明确动作 | 识别槽位、生成可编辑草稿；确认后提交 | `service_draft` + `token` |
+| `human` 人工/兜底 | `POST /chat` | 投诉、转人工、问候、闲聊及未知意图 | 兜底话术；演示版未接人工坐席 | `token` |
 
 分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
-每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。`/chat` 负责自动分类；
-`/branch/*` 则由 HTTP 路径直接锁定意图，便于联调、测试和后续按分支独立扩展。
+每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。
 `read` 的知识库与订单选择不再询问模型，而是按精确订单号或 user_id 确定性分派；姓名、
 手机号、商品关键词和空条件都不会进入订单仓储。
 
@@ -166,7 +161,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 90 个用例，约 3 秒
+python -m pytest            # 85 个用例，约 3 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -245,7 +240,7 @@ docs/
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
   interview-notes.md   30 秒陈述与高频追问应对
   deployment.md        三种跑法、compose 升级步骤、日志与排查
-  test-cases.md        90 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
+  test-cases.md        85 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
 ```
 
@@ -255,9 +250,6 @@ docker/                compose 升级落点（POC 不启用）
 app
 └── api/routes.py router
     ├── POST /chat
-    ├── POST /branch/read
-    ├── POST /branch/write
-    ├── POST /branch/human
     ├── POST /branch/service/confirm
     ├── POST /api/llm/config
     └── 健康、订单、知识库、指标与首页接口

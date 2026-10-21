@@ -12,7 +12,6 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 from backend.application.graph import (
     EVENT_DONE, EVENT_ERROR, EVENT_INTENT, EVENT_START, EVENT_TOKEN,
 )
-from backend.domain.core import IntentName
 from backend.infrastructure.llm import message_text
 from backend.infrastructure.observability import estimate_tokens
 
@@ -30,14 +29,12 @@ class ChatService:
         self,
         message: str,
         thread_id: str,
-        *,
-        requested_intent: IntentName | None = None,
     ) -> AsyncIterator[tuple[str, dict[str, Any]]]:
         config: dict[str, Any] = {
             "configurable": {"thread_id": thread_id},
             "metadata": {
                 "langfuse_session_id": thread_id,
-                "langfuse_tags": ["qa-ticket", f"branch:{requested_intent or 'auto'}"],
+                "langfuse_tags": ["qa-ticket", "auto"],
             },
         }
         usage_handler = UsageMetadataCallbackHandler()
@@ -48,10 +45,10 @@ class ChatService:
         graph, provider, _ = self._runtime.snapshot()
         yield EVENT_START, {"thread_id": thread_id, "provider": provider, "mock": provider == "mock"}
         started, first_at, answer, final_text = time.perf_counter(), None, [], ""
-        ok, intent = True, requested_intent or "unknown"
+        ok, intent = True, "unknown"
         try:
             async for mode, payload in graph.astream(
-                {"messages": [HumanMessage(content=message)], "requested_intent": requested_intent},
+                {"messages": [HumanMessage(content=message)]},
                 config=config,
                 stream_mode=["messages", "custom", "updates"],
             ):

@@ -15,8 +15,6 @@ class BrokenChatService:
         self,
         _message: str,
         _thread_id: str,
-        *,
-        requested_intent: str | None = None,
     ) -> AsyncIterator[tuple[str, dict]]:
         yield "start", {"thread_id": "stream-error", "provider": "test", "mock": True}
         raise RuntimeError("upstream disconnected")
@@ -27,8 +25,6 @@ class UnserializableChatService:
         self,
         _message: str,
         _thread_id: str,
-        *,
-        requested_intent: str | None = None,
     ) -> AsyncIterator[tuple[str, dict]]:
         yield "start", {"bad": object()}
 

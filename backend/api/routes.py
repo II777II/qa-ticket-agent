@@ -33,10 +33,9 @@ def get_chat(request: Request) -> ChatService:
 async def stream_events(
     chat: ChatService,
     req: ChatRequest,
-    requested_intent=None,
 ) -> AsyncIterator[ServerSentEvent]:
     try:
-        async for event, payload in chat.stream(req.message, req.thread_id, requested_intent=requested_intent):
+        async for event, payload in chat.stream(req.message, req.thread_id):
             yield ServerSentEvent(event=event, raw_data=json.dumps(payload, ensure_ascii=False))
     except Exception as exc:
         logger.exception("SSE 事件流异常")
@@ -44,22 +43,15 @@ async def stream_events(
         yield ServerSentEvent(event="error", raw_data=json.dumps(data, ensure_ascii=False))
 
 
-def _chat_endpoint(intent=None):
-    async def endpoint(req: ChatRequest, chat: ChatService = Depends(get_chat)):
-        async for event in stream_events(chat, req, intent):
-            yield event
-    return endpoint
-
-
-router.add_api_route("/chat", _chat_endpoint(), methods=["POST"], tags=["chat"], response_class=EventSourceResponse)
-for _intent in ("read", "write", "human"):
-    router.add_api_route(
-        f"/branch/{_intent}",
-        _chat_endpoint(_intent),
-        methods=["POST"],
-        tags=["intent-branches"],
-        response_class=EventSourceResponse,
-    )
+@router.post(
+    "/chat",
+    tags=["chat"],
+    summary="自动识别 read/write/human 的流式对话",
+    response_class=EventSourceResponse,
+)
+async def chat(req: ChatRequest, chat_service: ChatService = Depends(get_chat)):
+    async for event in stream_events(chat_service, req):
+        yield event
 
 
 @router.post("/branch/service/confirm", tags=["service-actions"])
