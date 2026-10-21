@@ -6,6 +6,7 @@ import logging
 import time
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
+from langchain_core.callbacks import UsageMetadataCallbackHandler
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 from backend.application.graph import (
@@ -40,11 +41,14 @@ class ChatService:
                 "langfuse_tags": ["qa-ticket", f"branch:{requested_intent or 'auto'}"],
             },
         }
+        usage_handler = UsageMetadataCallbackHandler()
+        callbacks: list[Any] = [usage_handler]
         if self._runtime.tracing and self._runtime.tracing.handler:
-            config["callbacks"] = [self._runtime.tracing.handler]
+            callbacks.append(self._runtime.tracing.handler)
+        config["callbacks"] = callbacks
         provider = getattr(self._runtime, "provider", "") or settings.llm_provider
         yield EVENT_START, {"thread_id": thread_id, "provider": provider, "mock": provider == "mock"}
-        started, first_at, answer, final_text, tokens = time.perf_counter(), None, [], "", 0
+        started, first_at, answer, final_text = time.perf_counter(), None, [], ""
         ok, intent = True, requested_intent or "unknown"
         try:
             async for mode, payload in self._runtime.graph.astream(
@@ -55,9 +59,6 @@ class ChatService:
                 if mode == "messages":
                     chunk, _ = payload
                     if isinstance(chunk, AIMessageChunk):
-                        usage = getattr(chunk, "usage_metadata", None)
-                        if isinstance(usage, dict):
-                            tokens = max(tokens, int(usage.get("total_tokens") or 0))
                         if text := message_text(chunk):
                             first_at = first_at or time.perf_counter()
                             answer.append(text)
@@ -84,8 +85,12 @@ class ChatService:
         finally:
             total_ms = int((time.perf_counter() - started) * 1000)
             first_ms = int((first_at - started) * 1000) if first_at else None
+            usage_tokens = sum(
+                int(usage.get("total_tokens") or 0)
+                for usage in usage_handler.usage_metadata.values()
+            )
             self._runtime.metrics.record_turn(
-                tokens=tokens or estimate_tokens(message + "".join(answer)),
+                tokens=usage_tokens or estimate_tokens(message + "".join(answer)),
                 first_token_ms=first_ms,
                 total_ms=total_ms,
                 ok=ok,

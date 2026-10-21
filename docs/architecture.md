@@ -187,6 +187,8 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 
 进程内指标只保留 KPI 和最终意图聚合 `calls / tokens / avg_latency_ms / success_rate`，
 用于后续按知识问答、订单、业务办理和兜底分支分别优化。
+每次请求创建独立 `UsageMetadataCallbackHandler`，按模型累加本轮全部 LLM 调用 Token；
+没有真实 usage 的 Mock 或异常场景回退到本地估算。
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
 | 编排 | preprocess + classify + 三类分支 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 

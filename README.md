@@ -159,7 +159,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 89 个用例，约 3 秒
+python -m pytest            # 90 个用例，约 3 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -238,7 +238,7 @@ docs/
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
   interview-notes.md   30 秒陈述与高频追问应对
   deployment.md        三种跑法、compose 升级步骤、日志与排查
-  test-cases.md        89 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
+  test-cases.md        90 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
 ```
 
