@@ -86,24 +86,8 @@ class MetricsKpi(BaseModel):
     requests: int = 0
     tokens: int = 0
     avg_first_token_ms: float = 0.0
-    p95_first_token_ms: int = 0
     avg_latency_ms: float = 0.0
     error_rate: float = 0.0
-
-
-class DayMetric(BaseModel):
-    date: str
-    requests: int = 0
-    tokens: int = 0
-    avg_latency_ms: float = 0.0
-
-
-class ModelMetric(BaseModel):
-    model: str
-    calls: int = 0
-    tokens: int = 0
-    avg_latency_ms: float = 0.0
-    success_rate: float = 100.0
 
 
 class IntentMetric(BaseModel):
@@ -115,13 +99,11 @@ class IntentMetric(BaseModel):
 
 
 class MetricsSummary(BaseModel):
-    """后台管理页的数据源：KPI + 按天趋势 + 按模型明细。"""
+    """后台管理页的数据源：KPI + 按意图明细。"""
 
     days: int = 7
     generated_at: str = ""
     kpis: MetricsKpi = Field(default_factory=MetricsKpi)
-    by_day: list[DayMetric] = Field(default_factory=list)
-    by_model: list[ModelMetric] = Field(default_factory=list)
     by_intent: list[IntentMetric] = Field(default_factory=list)
 
 

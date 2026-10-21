@@ -105,7 +105,7 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | GET | `/api/kb/articles?q=&category=` | 知识库文章列表（目录/分类/关键字） |
 | GET | `/api/kb/categories` | 知识库分类 |
 | GET | `/api/kb/articles/{article_no}` | 文章元信息（含 HTML 页面 URL） |
-| GET | `/api/metrics/summary?days=7` | 运营指标：Token、首字延迟、请求量、错误率、按天趋势、模型明细 |
+| GET | `/api/metrics/summary?days=7` | 运营指标：Token、首字延迟、请求量、错误率、按意图明细 |
 | GET | `/api/orders?q=&status=&user_id=` | 电商订单查询（50 条演示订单） |
 | GET | `/api/orders/{order_no}` | 订单详情（明细、地址、支付、退款、状态时间线） |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
@@ -130,7 +130,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 | `#/chat?panel=service` | 对话 + 业务办理 | 右侧编辑槽位、查看缺失提醒，并在核对后确认提交 |
 | `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
 | `#/kb` | 知识库检索 | 8 个分类浏览 50 篇 HTML；关键词检索 + RAG 命中片段，点击打开 HTML 原文 |
-| `#/admin` | 后台管理 | Token 消耗、平均首字延迟、请求总量、错误率、7 天趋势、模型调用明细 |
+| `#/admin` | 后台管理 | Token 消耗、平均首字延迟、请求总量、错误率、意图调用明细 |
 
 会话历史存在浏览器 localStorage（POC 不做服务端会话列表）；后台指标为进程内统计，重启清零。
 页脚/侧栏显示当前 git 短 hash，方便对照改前/改后版本。
@@ -161,7 +161,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 108 个用例，约 10 秒
+python -m pytest            # 107 个用例，约 10 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -251,8 +251,8 @@ frontend/
   src/router.ts        hash 路由（#/、#/chat、#/orders、#/kb、#/admin）
   src/App.tsx          路由分发 + 后端信息 + 离线提示
   src/pages/           HomePage / ChatPage / OrdersPage / KnowledgePage / AdminPage
-    src/components/      Sidebar / Composer / MessageList / KnowledgePanel / OrderPanel / ServicePanel
-                       / KpiCard / TrendChart / VersionBadge / SiteSidebar
+  src/components/      Sidebar / Composer / MessageList / KnowledgePanel / OrderPanel / ServicePanel
+                       / KpiCard / VersionBadge / SiteSidebar
   src/hooks/           useChat（流式与会话恢复）、useConversations（localStorage 历史）
   src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单/知识库/指标查询
   src/types.ts         与后端 schemas.py 对应的类型

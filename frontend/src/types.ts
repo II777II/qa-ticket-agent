@@ -156,24 +156,8 @@ export interface MetricsKpi {
   requests: number;
   tokens: number;
   avg_first_token_ms: number;
-  p95_first_token_ms: number;
   avg_latency_ms: number;
   error_rate: number;
-}
-
-export interface DayMetric {
-  date: string;
-  requests: number;
-  tokens: number;
-  avg_latency_ms: number;
-}
-
-export interface ModelMetric {
-  model: string;
-  calls: number;
-  tokens: number;
-  avg_latency_ms: number;
-  success_rate: number;
 }
 
 export interface IntentMetric {
@@ -188,8 +172,6 @@ export interface MetricsSummary {
   days: number;
   generated_at: string;
   kpis: MetricsKpi;
-  by_day: DayMetric[];
-  by_model: ModelMetric[];
   by_intent: IntentMetric[];
 }
 

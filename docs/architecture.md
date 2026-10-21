@@ -202,7 +202,7 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
 | LLM 可观测性 | 可选 Langfuse CallbackHandler | LangChain callbacks | Langfuse Cloud / 自托管 | `.env: LANGFUSE_ENABLED=true` |
 
-进程内指标除按天、按模型外，还按最终意图聚合 `calls / tokens / avg_latency_ms / success_rate`，
+进程内指标只保留 KPI 和最终意图聚合 `calls / tokens / avg_latency_ms / success_rate`，
 用于后续按知识问答、订单、业务办理、物流等分支分别优化。
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
 | 编排 | preprocess + classify + 五路分支；logistics 使用 Agent/Tools | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { ReloadOutlined, RobotOutlined } from "@ant-design/icons";
-import { Button, Empty, Space, Table, Typography } from "antd";
+import { Button, Space, Table, Typography } from "antd";
 
 import { getMetrics } from "../api/agent";
 import KpiCard from "../components/KpiCard";
-import TrendChart from "../components/TrendChart";
 import VersionBadge from "../components/VersionBadge";
 import { navigate } from "../router";
 import type { AgentInfo, MetricsSummary } from "../types";
@@ -38,8 +37,6 @@ export default function AdminPage({ info }: { info: AgentInfo | null }) {
   }, [refresh]);
 
   const kpis = metrics?.kpis;
-  const byDay = metrics?.by_day ?? [];
-  const rows = (metrics?.by_model ?? []).map((row) => ({ ...row, key: row.model }));
   const intentRows = (metrics?.by_intent ?? []).map((row) => ({ ...row, key: row.intent }));
 
   return (
@@ -88,60 +85,9 @@ export default function AdminPage({ info }: { info: AgentInfo | null }) {
         <div className="admin-body">
           <div className="kpi-row">
             <KpiCard label="Token 消耗" value={formatNumber(kpis?.tokens ?? 0)} hint="近 7 天 · 估算 + 真实 usage" />
-            <KpiCard label="平均首字延迟" value={Math.round(kpis?.avg_first_token_ms ?? 0)} unit="ms" hint={`P95 ${kpis?.p95_first_token_ms ?? 0} ms`} />
+            <KpiCard label="平均首字延迟" value={Math.round(kpis?.avg_first_token_ms ?? 0)} unit="ms" hint="只统计有首字时间的轮次" />
             <KpiCard label="请求总量" value={formatNumber(kpis?.requests ?? 0)} unit="次" hint={`平均 ${Math.round(kpis?.avg_latency_ms ?? 0)} ms / 轮`} />
             <KpiCard label="错误率" value={(kpis?.error_rate ?? 0).toFixed(2)} unit="%" hint="单轮失败占比" />
-          </div>
-
-          <div className="chart-row">
-            <div className="chart-card">
-              <div className="chart-head">
-                <span>系统延迟趋势</span>
-                <span className="muted">单位 ms</span>
-              </div>
-              {byDay.length > 0 ? (
-                <TrendChart data={byDay.map((day) => ({ label: day.date, value: day.avg_latency_ms }))} mode="line" />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有调用数据" />
-              )}
-            </div>
-            <div className="chart-card">
-              <div className="chart-head">
-                <span>Token 消耗分布</span>
-                <span className="muted">近 7 天</span>
-              </div>
-              {byDay.length > 0 ? (
-                <TrendChart data={byDay.map((day) => ({ label: day.date, value: day.tokens }))} mode="bars" />
-              ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有调用数据" />
-              )}
-            </div>
-          </div>
-
-          <div className="table-card">
-            <div className="chart-head">
-              <span>模型调用明细</span>
-              <span className="muted">按 Token 消耗排序</span>
-            </div>
-            <Table
-              size="small"
-              pagination={false}
-              dataSource={rows}
-              locale={{ emptyText: "跑几轮对话后这里会出现数据（进程内统计，重启清零）" }}
-              columns={[
-                { title: "模型", dataIndex: "model", key: "model" },
-                { title: "调用次数", dataIndex: "calls", key: "calls", align: "right" as const },
-                { title: "Token 消耗", dataIndex: "tokens", key: "tokens", align: "right" as const, render: (value: number) => formatNumber(value) },
-                { title: "平均延迟", dataIndex: "avg_latency_ms", key: "latency", align: "right" as const, render: (value: number) => `${Math.round(value)} ms` },
-                {
-                  title: "成功率",
-                  dataIndex: "success_rate",
-                  key: "success",
-                  align: "right" as const,
-                  render: (value: number) => <span className={value >= 99 ? "ok-text" : ""}>{value}%</span>,
-                },
-              ]}
-            />
           </div>
 
           <div className="table-card">

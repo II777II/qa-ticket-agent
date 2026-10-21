@@ -158,8 +158,6 @@ def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
     assert kpis["tokens"] > 0
     assert kpis["avg_latency_ms"] > 0
     assert kpis["avg_first_token_ms"] >= 0
-    assert len(summary["by_day"]) == 1
-    assert summary["by_model"][0]["calls"] == 1
     assert summary["by_intent"][0]["intent"] == "knowledge"
 
 

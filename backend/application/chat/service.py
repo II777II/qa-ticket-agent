@@ -205,7 +205,6 @@ class ChatService:
             first_ms = int((first_token_at - started) * 1000) if first_token_at else None
             tokens = usage_tokens or estimate_tokens(message + "".join(answer_parts))
             self._runtime.metrics.record_turn(
-                model=settings.llm_model or settings.llm_provider,
                 tokens=tokens,
                 first_token_ms=first_ms,
                 total_ms=total_ms,
