@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.types import StreamWriter
 
-from backend.domain.core import (
+from backend.domain.intent import (
     HUMAN_HINTS,
     ORDER_NO_RE,
     IntentResult,

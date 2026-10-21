@@ -29,7 +29,7 @@ os.environ["LANGFUSE_ENABLED"] = "false"
 
 from backend.application.graph import build_graph  # noqa: E402
 from backend.application.runtime import AgentRuntime, create_runtime  # noqa: E402
-from backend.domain.core import TicketCreate  # noqa: E402
+from backend.domain.models import TicketCreate  # noqa: E402
 from backend.infrastructure.config import settings  # noqa: E402
 from backend.infrastructure.llm import FakeChatModel  # noqa: E402
 from backend.infrastructure.observability import MetricsCollector  # noqa: E402

@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.domain.core import (
-    TicketCreate, TicketRecord, duplicate_of, extract_user_id, is_order_query, next_ticket_id,
-    rule_classify,
-)
+from backend.domain.intent import extract_user_id, is_order_query, rule_classify
+from backend.domain.models import TicketCreate, TicketRecord, duplicate_of, next_ticket_id
 
 TODAY = date(2026, 10, 16)
 

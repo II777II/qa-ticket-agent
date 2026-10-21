@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr
 
-from backend.domain.core import ServiceType, TicketCategory, TicketPriority
+from backend.domain.models import ServiceType, TicketCategory, TicketPriority
 
 
 class ChatRequest(BaseModel):

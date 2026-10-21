@@ -14,7 +14,8 @@ from fastapi.sse import ServerSentEvent
 from backend.api.schemas import ChatRequest, LlmConfigRequest, ServiceConfirmRequest
 from backend.application.chat import ChatService
 from backend.application.runtime import AgentRuntime
-from backend.domain.core import ORDER_NO_RE, TicketCreate
+from backend.domain.intent import ORDER_NO_RE
+from backend.domain.models import TicketCreate
 from backend.infrastructure.config import LLM_MODELS, git_version, settings
 from backend.infrastructure.llm import create_llm
 

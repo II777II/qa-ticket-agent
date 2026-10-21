@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from backend.domain.core import TicketCreate
+from backend.domain.models import TicketCreate
 from backend.infrastructure.storage import JsonTicketStore
 
 

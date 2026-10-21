@@ -83,7 +83,7 @@ read、write、human 三类都是明确、可测试的执行路径；read 内部
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `core.py` 集中请求模型、全部路由、SSE、FastAPI 与静态托管；`app.py` 是 ASGI 入口 | 不改 |
 | 应用层 | `backend/application/` | `graph.py` 三路编排与工具，`chat.py` 对话用例，`runtime.py` 运行装配 | 按职责修改对应文件 |
-| 领域层 | `backend/domain/core.py` | 实体、意图/槽位、订单摘要、分类/优先级/去重/单号规则 | 不改 |
+| 领域层 | `backend/domain/` | `intent.py` 意图/槽位/分类，`models.py` 实体、订单摘要和工单规则 | 按领域修改对应文件 |
 | 基础设施层 | `backend/infrastructure/` | 配置、仓储、检索、模型、指标与 Langfuse 分文件维护 | 按适配器扩展 |
 
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。

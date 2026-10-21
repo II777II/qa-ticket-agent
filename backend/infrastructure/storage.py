@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from backend.domain.core import (
+from backend.domain.models import (
     KnowledgeArticle, KnowledgeCategory, OrderRecord, TicketCreate, TicketRecord,
     duplicate_of, next_ticket_id,
 )
