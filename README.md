@@ -161,7 +161,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 86 个用例，约 3 秒
+python -m pytest            # 89 个用例，约 3 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -209,8 +209,14 @@ python -m backend.scripts.generate_ecommerce_demo
 回答里标 `[1][2]` 对应片段。参考资料**不进消息历史**，所以多轮对话不会被旧资料撑爆。
 
 这套关键词检索的短板很直接：换个说法（同义词）就可能检不到，长问题也容易被高频词带偏。
-生产环境换成「向量检索 + 关键词混合 + 重排」，只要实现 LangChain 的 `BaseRetriever`
-并把 `.env` 改成 `RETRIEVER=pgvector`，`graph.py` 与工具层都不用动。
+当前已提供 LangChain `PGVector` 最小适配。配置 `DATABASE_URL`、Embedding 后执行：
+
+```powershell
+python -m backend.scripts.ingest_pgvector --reset
+```
+
+再把 `.env` 改成 `RETRIEVER=pgvector`。`EMBEDDING_PROVIDER=mock` 可用于离线验证数据管线，
+但确定性假向量不代表真实语义检索；真实 RAG 需要配置 OpenAI 或兼容 Embedding 服务。
 
 ## 目录结构
 
@@ -218,10 +224,11 @@ python -m backend.scripts.generate_ecommerce_demo
 backend/
   domain/              intent.py（意图/槽位/分类）、models.py（实体与订单/工单规则）
   application/         graph.py（三路图与工具）、chat.py（对话用例）、runtime.py（运行装配）
-  infrastructure/      config.py、storage.py、retrieval.py、llm.py、observability.py
+  infrastructure/      config.py、storage.py、retrieval.py、vector_store.py、llm.py、observability.py
   api/                 app.py（FastAPI 组装）、routes.py（HTTP/SSE）、schemas.py（请求模型）
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）
+  scripts/ingest_pgvector.py 导入 HTML 知识片段到 LangChain PGVector
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
   data/demo/ecommerce/ 50 条订单 + 50 篇 HTML 知识库（含 tables/ 与 kb/）
 frontend/
@@ -240,7 +247,7 @@ docs/
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
   interview-notes.md   30 秒陈述与高频追问应对
   deployment.md        三种跑法、compose 升级步骤、日志与排查
-  test-cases.md        86 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
+  test-cases.md        89 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
 ```
 

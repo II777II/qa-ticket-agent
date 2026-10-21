@@ -51,6 +51,30 @@ http://127.0.0.1:5179/docs
 Compose 使用可选的上层 `.env`，文件不存在时仍以 Mock/JSON 默认值启动，并配置容器健康检查。
 构建上下文由根目录 `.dockerignore` 排除 `.env`、Node 依赖、测试、脚本和缓存。
 
+### 4. PGVector 知识检索
+
+先确认目标库已安装 `vector` 扩展，并配置：
+
+```env
+RETRIEVER=pgvector
+DATABASE_URL=postgresql+psycopg://qa_ticket:change-me@127.0.0.1:5432/qa_ticket
+PGVECTOR_COLLECTION=kb_chunk
+EMBEDDING_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+EMBEDDING_API_KEY=sk-xxxx
+```
+
+首次或重建索引：
+
+```powershell
+python -m backend.scripts.ingest_pgvector --reset
+```
+
+只做离线管线验证时可设置 `EMBEDDING_PROVIDER=mock`，无需网络和 Key，但假向量不能代表真实
+语义检索效果。PGVector 使用 LangChain 标准集合表 `langchain_pg_collection` 和
+`langchain_pg_embedding`，不迁移现有 7 张知识库业务表。
+
 ## 生产化升级的具体步骤
 
 代码不需要改，只改配置 + 装依赖 + 打开对应服务：
@@ -60,7 +84,7 @@ Compose 使用可选的上层 `.env`，文件不存在时仍以 Mock/JSON 默认
 | 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `infrastructure/llm.py` 的 `create_checkpointer()` 已留分支 |
 | 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 在 `infrastructure/storage.py` 增加 Postgres 仓储类 |
 | 订单入库 | `sqlalchemy`、`psycopg[binary]` | `ORDER_STORE=postgres` | 按 `docs/sql/postgres_schema.sql` 建表，在 `infrastructure/storage.py` 增加 Postgres 仓储 |
-| 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | `infrastructure/retrieval.py` 增加 pgvector 实现 |
+| 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`DATABASE_URL`/`EMBEDDING_*` | `infrastructure/vector_store.py` |
 | 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `infrastructure/llm.py` 的 `create_llm()` 加分支 |
 | 会话缓存 / 限流 | `redis` | `REDIS_URL=...` | 新增 |
 | LLM 可观测性 | `langfuse>=5` | `LANGFUSE_ENABLED=true` 等 | `infrastructure/observability.py` 的 Langfuse 适配 |

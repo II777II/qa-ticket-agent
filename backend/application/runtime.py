@@ -60,6 +60,8 @@ class AgentRuntime:
 
     def shutdown(self) -> None:
         self.tracing and self.tracing.shutdown()
+        if hasattr(self.retriever, "close"):
+            self.retriever.close()
 
     def reconfigure_llm(self, llm: Any, provider: str, model: str) -> None:
         with self._llm_lock:

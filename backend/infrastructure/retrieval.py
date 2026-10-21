@@ -127,10 +127,12 @@ def format_context(documents: Sequence[Document]) -> str:
     return "\n".join(lines)
 
 
-def create_retriever() -> InMemoryRetriever | None:
+def create_retriever() -> BaseRetriever | None:
     if settings.retriever == "memory":
         retriever = InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
         return retriever if retriever.chunk_count() else None
     if settings.retriever == "pgvector":
-        raise NotImplementedError("RETRIEVER=pgvector 尚未接入")
+        from backend.infrastructure.vector_store import create_pgvector_retriever
+
+        return create_pgvector_retriever()
     raise ValueError(f"未知的 RETRIEVER: {settings.retriever!r}")

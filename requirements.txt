@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------
-# POC 依赖。刻意保持最小：只装到「对话 -> 编排 -> 模型」跑通为止。
+# POC 依赖：对话、编排、模型、进程内检索与 PGVector 最小适配。
 # ---------------------------------------------------------------
 
 # Web 层
@@ -10,6 +10,7 @@ python-dotenv>=1.0
 # 模型与编排：4 个扩展点的抽象接口都在 langchain-core / langgraph 里
 langchain-core>=1.0
 langchain-openai>=1.0
+langchain-postgres>=0.0.19
 langgraph>=0.2.60
 langfuse>=5,<6
 
@@ -23,9 +24,8 @@ grandalf>=0.8
 pillow>=10.0
 
 # ---------------------------------------------------------------
-# 生产化升级时再装（POC 不装，代码里已经留好工厂分支）
+# 尚未启用的生产化扩展
 #   langgraph-checkpoint-postgres>=2.0     -> CHECKPOINTER=postgres
-#   langchain-postgres>=0.0.12             -> RETRIEVER=pgvector
-#   sqlalchemy>=2.0 / psycopg[binary]>=3.2 -> TICKET_STORE=postgres
+#   langchain-postgres 已提供 SQLAlchemy/psycopg，可供后续 TICKET_STORE=postgres 复用
 #   redis>=5.0                             -> 会话与热点缓存
 # ---------------------------------------------------------------

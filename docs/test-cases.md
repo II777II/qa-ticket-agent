@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（86 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、40 条固定评测集、Token usage 聚合、健康降级、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
+- **自动化用例**（89 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、40 条固定评测集、PGVector 离线适配、Token usage 聚合、健康降级、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 86 passed in ~3s
+python -m pytest              # 89 passed in ~3s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -29,6 +29,9 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | R-08 | 参考资料块格式 | —— | 检索后格式化 | 以 `【参考资料】` 开头、`【参考资料结束】` 结尾，含 `[1]` 与文件名 |
 | R-09 | 空目录降级 | 空目录 | 初始化并检索 | 片段数 0、返回空、不抛异常 |
 | R-10 | 非 HTML 不进入索引 | 目录含 `.md`、`.txt` | 初始化检索器 | 片段数 0 |
+| R-11 | PGVector mock embedding | `EMBEDDING_PROVIDER=mock` | 生成 8 维 embedding | 返回 8 个浮点数 |
+| R-12 | PGVector 结果映射 | 注入假 PGVector store | 执行 Retriever | content/metadata/score/index 正确 |
+| R-13 | PostgreSQL URL 规范化 | 输入 `postgresql://` | 调用 DSN 工厂 | 自动转换为 `postgresql+psycopg://` |
 
 ## 二、工单存储（`test_store.py`）
 
