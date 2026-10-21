@@ -46,10 +46,17 @@ flowchart TD
     C -- knowledge --> K["knowledge<br/>RAG 检索 + 生成回答"]
     C -- query --> Q["query<br/>OrderService 查询"]
     C -- service --> V["service<br/>槽位抽取 + 工单草稿"]
+    C -- logistics --> L["logistics<br/>物流预处理"]
+    L --> LA["logistics_agent<br/>bind_tools + 决策"]
+    LA -- tools --> LT["logistics_tools<br/>query_order"]
+    LT --> LA
+    LA -- guard --> LG["logistics_guard<br/>循环上限保护"]
     C -- fallback --> F["fallback<br/>投诉/转人工/闲聊"]
     K --> E([__end__])
     Q --> E
     V --> E
+    LA -- end --> E
+    LG --> E
     F --> E
 ```
 
@@ -57,14 +64,18 @@ flowchart TD
 | --- | --- |
 | `preprocess` | 取最后一条用户消息，去空白并截断到 2000 字 |
 | `classify` | `classify_intent()`：优先 LLM `with_structured_output`，演示模式/失败时用 `rule_classify()`；产出 intent/confidence/reason/slots |
-| `route_by_intent` | 条件边：只允许 knowledge / query / service / fallback，未知意图走 fallback |
+| `route_by_intent` | 条件边：只允许 knowledge / query / service / logistics / fallback，未知意图走 fallback |
 | `knowledge` | 调用检索器并拼【参考资料】，再 `llm.invoke()` 生成带引用回答 |
 | `query` | 解析订单号/关键词，调用 `OrderService.get/search`，返回订单列表（不检索） |
 | `service` | 抽取业务类型/订单号/联系人等槽位，生成可编辑草稿；用户确认后才提交 |
+| `logistics` | 抽取物流查询条件，并进入 Agent/Tools 循环 |
+| `logistics_agent` | 绑定工具并调用模型，决定是否继续调用工具 |
+| `logistics_tools` | 执行 `query_order` 等物流试点工具，把 ToolMessage 返回 Agent |
+| `logistics_guard` | Agent 循环超过 4 步时安全结束 |
 | `fallback` | 投诉/转人工/闲聊兜底话术；演示版无人工坐席 |
 
-当前 LangGraph 里**不再有 `agent` / `tools` 节点**：订单分支直接调用用例，工单工具仍保留在
-`application/agent/tools.py` 与单测中，但运行时不暴露。
+当前只有 `logistics` 分支使用 Agent/Tools 循环；knowledge、query、service、fallback
+保持确定性或单次 LLM 调用。这样可以在一个图里同时保留确定性路径与未来复杂 Agent 路径。
 
 ## 工具是什么
 
@@ -119,6 +130,7 @@ main app
         ├── POST /branch/knowledge
         ├── POST /branch/query
         ├── POST /branch/service
+        ├── POST /branch/logistics
         ├── POST /branch/service/confirm
         └── POST /branch/fallback
 ```
@@ -203,7 +215,7 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 进程内指标除按天、按模型外，还按最终意图聚合 `calls / tokens / avg_latency_ms / success_rate`，
 用于后续按知识问答、订单、业务办理、物流等分支分别优化。
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
-| 编排 | preprocess + classify + 四路分支 + custom 事件 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
+| 编排 | preprocess + classify + 五路分支；logistics 使用 Agent/Tools | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 
 ## 几个刻意的设计取舍
 

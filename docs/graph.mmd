@@ -10,16 +10,27 @@ graph TD;
 	knowledge["knowledge<br/>RAG 问答"]
 	query["query<br/>订单查询"]
 	service["service<br/>工单草稿"]
+	logistics["logistics<br/>物流预处理"]
+	logistics_agent["logistics_agent<br/>bind_tools + 决策"]
+	logistics_guard["logistics_guard<br/>循环上限保护"]
 	fallback["fallback<br/>投诉 / 闲聊 / 转人工"]
+	logistics_tools["logistics_tools<br/>query_order"]
 	__end__([<p>__end__</p>]):::last
 	__start__ --> preprocess;
 	classify -.->|fallback| fallback;
 	classify -.->|knowledge| knowledge;
+	classify -.->|logistics| logistics;
 	classify -.->|query| query;
 	classify -.->|service| service;
+	logistics --> logistics_agent;
+	logistics_agent -. &nbsp;end&nbsp; .-> __end__;
+	logistics_agent -. &nbsp;guard&nbsp; .-> logistics_guard;
+	logistics_agent -. &nbsp;tools&nbsp; .-> logistics_tools;
+	logistics_tools --> logistics_agent;
 	preprocess --> classify;
 	fallback --> __end__;
 	knowledge --> __end__;
+	logistics_guard --> __end__;
 	query --> __end__;
 	service --> __end__;
 	classDef default fill:#f2f0ff,line-height:1.2

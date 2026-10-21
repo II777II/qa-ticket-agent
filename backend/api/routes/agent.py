@@ -1,4 +1,4 @@
-"""Agent 四路分支路由：显式进入 knowledge / query / service / fallback。"""
+"""Agent 五路分支路由：knowledge / query / service / logistics / fallback。"""
 
 from __future__ import annotations
 
@@ -42,6 +42,15 @@ async def service(
     chat_service: ChatService = Depends(get_chat),
 ) -> AsyncIterator[ServerSentEvent]:
     async for event in stream_events(chat_service, req, requested_intent="service"):
+        yield event
+
+
+@router.post("/logistics", summary="物流 Agent + Tools 分支（SSE）", response_class=EventSourceResponse)
+async def logistics(
+    req: ChatRequest,
+    chat_service: ChatService = Depends(get_chat),
+) -> AsyncIterator[ServerSentEvent]:
+    async for event in stream_events(chat_service, req, requested_intent="logistics"):
         yield event
 
 

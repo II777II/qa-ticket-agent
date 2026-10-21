@@ -5,11 +5,14 @@
 """
 
 from backend.application.agent.graph import AgentState, build_graph, route_by_intent
+from backend.application.agent.logistics import LOGISTICS_SYSTEM_PROMPT, MAX_LOGISTICS_STEPS
 from backend.application.agent.prompts import SYSTEM_PROMPT
 from backend.application.agent.tools import create_tools
 
 __all__ = [
     "AgentState",
+    "LOGISTICS_SYSTEM_PROMPT",
+    "MAX_LOGISTICS_STEPS",
     "build_graph",
     "route_by_intent",
     "create_tools",

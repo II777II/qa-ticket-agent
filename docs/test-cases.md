@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（111 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、异常兜底、Langfuse、包契约、意图指标、检索、存储、工具、接口与整链；
+- **自动化用例**（116 个，`backend/tests/`）——后端链路、订单/知识库数据、五路意图路由、物流 Agent/Tools、业务确认、custom 流、异常兜底、Langfuse、包契约、意图指标、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 111 passed in ~12s
+python -m pytest              # 116 passed in ~12s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -64,7 +64,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 
 | 编号 | 用例 | 步骤 | 预期 |
 | --- | --- | --- | --- |
-| G-01 | 四路条件边 | 输入四种合法 intent 与一个未知 intent | 分别去 knowledge / query / service / fallback，未知值走 fallback |
+| G-01 | 五路条件边 | 输入五种合法 intent 与一个未知 intent | 分别去 knowledge / query / service / logistics / fallback |
 | G-02 | 显式意图强制分支 | 构造 `requested_intent` 调图 | 四种值分别锁定对应分支，不再执行自动分类 |
 | G-03 | 强制状态清理 | 同一 thread 先强制 fallback，下一轮传 None | 下一轮恢复自动分类为 knowledge |
 | G-04 | 引用写回 state | 问「退款多久到账」 | `retrieved` 非空，第一条来源 `KB-EC-0020.html`，片段长度 ≤ 160 |
@@ -76,6 +76,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | G-10 | LangGraph custom 事件 | 直接订阅 `stream_mode="custom"` 执行维修分支 | 收到且只收到一条 `service_draft`，事件载荷含维修槽位 |
 | G-11 | Chat 包公开门面 | 检查 `application.chat.__all__` | 只包含 `ChatService`，不把 EVENT_* 重新混入 chat 包 |
 | G-12 | 共享事件契约 | 从 `application.contracts` 导入 EVENT_* | 事件常量可用，契约归属独立模块 |
+| G-13 | 物流 Agent/Tools 循环 | 物流问题提供有效订单号 | logistics → agent → query_order tools → agent，最终无 tool_calls |
 
 ## 五、接口（`test_api.py`）
 
@@ -90,7 +91,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-07 | 对话不建工单 | 流式说「帮我建个工单」 | 不出现 create_ticket 或 ticket 事件 |
 | A-08 | 空消息拦截 | `POST /chat` 传空 message | 422，不进图 |
 | A-09 | 订单 SSE | `POST /chat` 问「帮我查询张三的订单」 | intent=query，含 order、无 citation |
-| A-10 | 四路显式 HTTP 入口 | 同一句分别请求四个 `/branch/*` | intent 事件分别等于 knowledge / query / service / fallback |
+| A-10 | 五路显式 HTTP 入口 | 同一句分别请求五个业务 `/branch/*` | intent 等于 knowledge / query / service / logistics / fallback |
 | A-11 | 分支状态不串线 | 同一 thread 先走 `/branch/fallback`，再走 `/chat` | `/chat` 清除强制意图并自动分流到 knowledge |
 | A-12 | 业务草稿 SSE | 问包含订单号、换货、联系人的售后问题 | 收到 `service_draft`，四个槽位完整，ready=true，未写工单 |
 | A-13 | 确认后建单 | 提交 `/branch/service/confirm` | 200，返回 TK 单号并新增工单；重复提交返回原工单 |
@@ -100,6 +101,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-17 | SSE 序列化异常 | 事件 payload 含不可 JSON 序列化对象 | 转成 `error` 事件，连接不抛未处理异常 |
 | A-18 | 工具订单事件 | `query_order` 返回 orders 的 ToolMessage | 正常产生 `order` 事件，不因漏导入报错 |
 | A-19 | 意图指标 | 完成一轮知识问答后读取指标 | `by_intent` 含 knowledge，统计 calls/tokens/延迟/成功率 |
+| A-20 | 物流 Agent SSE | 询问带订单号的快递进度 | 出现 tool、order、token，intent=logistics |
 
 ## 六、整链（`test_chat_flow.py`）
 
@@ -150,7 +152,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | 需求（`问答工单.md`） | 覆盖用例 |
 | --- | --- |
 | 智能问答、多轮对话、引用来源 | R-03/R-04/R-08、G-04/G-05/G-08、A-06、E-01、M-01/M-03/M-08 |
-| 四路意图识别与 HTTP 分支路由 | G-01/G-02、A-05/A-10/A-11、E-01、M-19 |
+| 五路意图识别与 HTTP 分支路由 | G-01/G-02/G-13、A-05/A-10/A-11/A-20、E-01、M-19 |
 | 业务办理草稿与用户确认 | G-06、A-07/A-12/A-13/A-14、E-02、M-02/M-20 |
 | 记忆与编排、异常降级 | G-03/G-08/G-09、E-03、A-11 |
 | 知识库检索准确性 | R-01~R-09、G-04/G-05、A-06 |

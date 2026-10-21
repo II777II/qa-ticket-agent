@@ -1,4 +1,4 @@
-"""接口用例：健康检查、能力查询、四路分支与 SSE 事件契约。"""
+"""接口用例：健康检查、能力查询、五路分支与 SSE 事件契约。"""
 
 from __future__ import annotations
 
@@ -105,6 +105,7 @@ def test_openapi_mounts_chat_and_four_branch_routes() -> None:
     assert paths["/branch/query"]["post"]
     assert paths["/branch/service"]["post"]
     assert paths["/branch/service/confirm"]["post"]
+    assert paths["/branch/logistics"]["post"]
     assert paths["/branch/fallback"]["post"]
     assert "/api/tickets" not in paths
 
@@ -341,6 +342,7 @@ def test_service_confirmation_rejects_unknown_order(isolated_runtime: AgentRunti
         ("/branch/knowledge", "knowledge"),
         ("/branch/query", "query"),
         ("/branch/service", "service"),
+        ("/branch/logistics", "logistics"),
         ("/branch/fallback", "fallback"),
     ],
 )
@@ -375,3 +377,22 @@ def test_explicit_branch_does_not_leak_into_next_chat_request(isolated_runtime: 
     intent = [payload for name, payload in events if name == "intent"][-1]
     assert intent["intent"] == "knowledge"
     assert intent["reason"] != "由显式 HTTP 分支路由指定"
+
+
+def test_logistics_chat_uses_agent_and_query_order_tool(isolated_runtime: AgentRuntime) -> None:
+    _prepare(isolated_runtime)
+    order_no = isolated_runtime.orders.search(limit=1)[0].order_no
+    events = asyncio.run(
+        _stream_chat(
+            f"我的快递到哪了？订单 {order_no}",
+            "api-logistics",
+        )
+    )
+
+    names = [name for name, _ in events]
+    intent = [payload for name, payload in events if name == "intent"][-1]
+    assert intent["intent"] == "logistics"
+    assert "tool" in names
+    assert "order" in names
+    text = "".join(payload["text"] for name, payload in events if name == "token")
+    assert order_no in text

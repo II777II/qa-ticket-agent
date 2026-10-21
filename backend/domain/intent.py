@@ -31,9 +31,10 @@ KNOWLEDGE_EXCLUSIONS = ("退款", "退货", "发票", "物流", "发货", "规�
 
 CREATE_HINTS = ("建单", "建个工单", "创建工单", "提交工单", "售后工单", "帮我建", "帮我提")
 AFTER_SALES_HINTS = ("退货", "换货", "维修", "保修", "价保", "质量问题", "退款失败", "没收到", "损坏")
+LOGISTICS_HINTS = ("物流", "快递", "配送", "派送", "签收", "揽收", "运单", "包裹")
 FALLBACK_HINTS = ("投诉", "差评", "转人工", "人工客服", "客服电话", "在吗", "你好", "您好", "嗨", "谢谢", "闲聊")
 
-IntentName = Literal["knowledge", "query", "service", "fallback"]
+IntentName = Literal["knowledge", "query", "service", "logistics", "fallback"]
 ServiceType = Literal["退货", "换货", "维修", "退款", "补发", "价保", "其他"]
 
 SERVICE_TYPE_RULES: tuple[tuple[ServiceType, tuple[str, ...]], ...] = (
@@ -49,7 +50,12 @@ SERVICE_TYPE_RULES: tuple[tuple[ServiceType, tuple[str, ...]], ...] = (
 class IntentResult(BaseModel):
     """意图识别结果（LLM 结构化输出与规则兜底共用）。"""
 
-    intent: IntentName = Field(description="knowledge=知识咨询, query=订单查询, service=售后业务办理, fallback=投诉/闲聊/转人工")
+    intent: IntentName = Field(
+        description=(
+            "knowledge=知识咨询, query=订单查询, service=售后业务办理, "
+            "logistics=物流查询, fallback=投诉/闲聊/转人工"
+        )
+    )
     confidence: float = Field(default=0.5, ge=0, le=1, description="置信度 0-1")
     reason: str = Field(default="", description="一句话说明判断依据")
     slots: dict[str, str] = Field(default_factory=dict, description="抽取到的槽位，如 order_no/keyword")
@@ -128,6 +134,14 @@ def rule_classify(text: str) -> IntentResult:
             confidence=0.85,
             reason="命中售后/业务办理关键词",
             slots=slots,
+        )
+    if any(hint in text for hint in LOGISTICS_HINTS):
+        order_no = ORDER_NO_RE.search(text)
+        return IntentResult(
+            intent="logistics",
+            confidence=0.88,
+            reason="命中物流/快递/配送关键词",
+            slots={"order_no": order_no.group(0).upper()} if order_no else {},
         )
     if (
         order_no

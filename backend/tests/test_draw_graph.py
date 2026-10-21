@@ -56,3 +56,21 @@ def test_no_tools_node_when_empty() -> None:
     )
     annotated = _annotate(raw, tool_names=[], has_retriever=False)
     assert 'tools["' not in annotated
+
+
+def test_annotates_logistics_agent_tool_loop() -> None:
+    raw = (
+        "graph TD;\n"
+        "\tclassify(classify)\n"
+        "\tlogistics(logistics)\n"
+        "\tlogistics_agent(logistics_agent)\n"
+        "\tlogistics_guard(logistics_guard)\n"
+        "\tlogistics_tools(logistics_tools)\n"
+        "\tclassify -.-> logistics;\n"
+    )
+    annotated = _annotate(raw, tool_names=["query_order"], has_retriever=False)
+    assert "物流预处理" in annotated
+    assert "bind_tools + 决策" in annotated
+    assert "循环上限保护" in annotated
+    assert "logistics_tools<br/>query_order" in annotated
+    assert "classify -.->|logistics| logistics;" in annotated

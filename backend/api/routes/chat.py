@@ -1,4 +1,4 @@
-"""统一对话入口：自动识别意图并进入四路之一。"""
+"""统一对话入口：自动识别意图并进入五路之一。"""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ router = APIRouter(tags=["chat"])
 
 @router.post(
     "/chat",
-    summary="流式对话（SSE，自动识别四路意图）",
+    summary="流式对话（SSE，自动识别五路意图）",
     response_class=EventSourceResponse,
 )
 async def chat(

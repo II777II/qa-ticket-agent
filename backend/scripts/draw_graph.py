@@ -159,6 +159,11 @@ def _annotate(mermaid: str, *, tool_names: list[str], has_retriever: bool) -> st
     if tool_names:
         tools_label = "tools<br/>" + " / ".join(tool_names)
         mermaid = re.sub(r"(?m)^(\s*)tools\(tools\)\s*$", rf'\1tools["{tools_label}"]', mermaid)
+        mermaid = re.sub(
+            r"(?m)^(\s*)logistics_tools\(logistics_tools\)\s*$",
+            rf'\1logistics_tools["logistics_tools<br/>{" / ".join(tool_names)}"]',
+            mermaid,
+        )
 
     # agent 节点：写出内部步骤（含 RAG）
     steps = ["agent"]
@@ -171,18 +176,21 @@ def _annotate(mermaid: str, *, tool_names: list[str], has_retriever: bool) -> st
     mermaid = re.sub(r"(?m)^(\s*)agent\s*-\.->\s*__end__;", r"\1agent -.->|无 tool_calls| __end__;", mermaid)
     mermaid = re.sub(r"(?m)^(\s*)agent\s*-\.->\s*tools;", r"\1agent -.->|有 tool_calls| tools;", mermaid)
 
-    # 四路路由主干：给节点与条件边补上中文说明
+    # 五路路由主干：给节点与条件边补上中文说明
     labels = {
         "preprocess": "preprocess<br/>清洗 / 截断",
         "classify": "classify<br/>LLM 意图识别 + 规则兜底",
         "knowledge": "knowledge<br/>RAG 问答",
         "query": "query<br/>订单查询",
         "service": "service<br/>工单草稿",
+        "logistics": "logistics<br/>物流预处理",
+        "logistics_agent": "logistics_agent<br/>bind_tools + 决策",
+        "logistics_guard": "logistics_guard<br/>循环上限保护",
         "fallback": "fallback<br/>投诉 / 闲聊 / 转人工",
     }
     for node, label in labels.items():
         mermaid = re.sub(rf"(?m)^(\s*){node}\({node}\)\s*$", rf'\1{node}["{label}"]', mermaid)
-    for branch in ("knowledge", "query", "service", "fallback"):
+    for branch in ("knowledge", "query", "service", "logistics", "fallback"):
         mermaid = re.sub(
             rf"(?m)^(\s*)classify\s*-\.->\s*{branch};",
             rf"\1classify -.->|{branch}| {branch};",

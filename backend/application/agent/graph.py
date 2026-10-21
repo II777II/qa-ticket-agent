@@ -1,11 +1,12 @@
-"""LangGraph 主干：预处理 → LLM 意图识别 → 四路路由。
+"""LangGraph 主干：预处理 → LLM 意图识别 → 五路路由。
 
     START → preprocess → classify ─┬→ knowledge → END
                                    ├→ query     → END
                                    ├→ service   → END
+                                   ├→ logistics → agent ⇄ tools → END
                                    └→ fallback  → END
 
-四路依据：知识咨询 / 订单查询 / 售后业务办理 / 投诉·闲聊·转人工。
+五路依据：知识咨询 / 订单查询 / 售后业务办理 / 物流查询 / 投诉·闲聊·转人工。
 POC 的 service 分支只生成「工单草稿」并追问缺失槽位，不直接建单。
 """
 
@@ -21,6 +22,13 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.types import StreamWriter
 
 from backend.application.agent.classifier import classify_intent
+from backend.application.agent.logistics import (
+    create_logistics_tools_node,
+    logistics_agent_node,
+    logistics_guard_node,
+    logistics_prepare_node,
+    route_logistics,
+)
 from backend.application.agent.prompts import SYSTEM_PROMPT
 from backend.application.contracts import (
     EVENT_CITATION,
@@ -39,7 +47,7 @@ from backend.domain.intent import (
 )
 from backend.infrastructure.retrieval.in_memory import format_context
 
-INTENTS = {"knowledge", "query", "service", "fallback"}
+INTENTS = {"knowledge", "query", "service", "logistics", "fallback"}
 TRANSFER_HINTS = ("转人工", "人工客服", "找人工", "客服电话", "投诉", "差评")
 
 
@@ -53,6 +61,7 @@ class AgentState(MessagesState):
     retrieved: NotRequired[list[dict[str, Any]]]
     orders: NotRequired[list[dict[str, Any]]]
     draft: NotRequired[dict[str, Any]]
+    logistics_steps: NotRequired[int]
 
 
 def _last_human_text(messages: Sequence[BaseMessage]) -> str:
@@ -279,7 +288,7 @@ def _fallback_node(state: AgentState) -> dict[str, Any]:
 def build_graph(
     *,
     llm: BaseChatModel,
-    tools: Sequence[BaseTool] = (),  # 兼容旧调用；四路路由分支自行调用用例/工具
+    tools: Sequence[BaseTool] = (),  # logistics 分支使用；其它分支直接调用确定性用例
     retriever: Any | None = None,
     checkpointer: Any | None = None,
     order_service: OrderService | None = None,
@@ -291,15 +300,35 @@ def build_graph(
     builder.add_node("knowledge", _knowledge_node(llm, retriever, system_prompt))
     builder.add_node("query", _query_node(order_service))
     builder.add_node("service", _service_node)
+    builder.add_node("logistics", logistics_prepare_node)
+    builder.add_node("logistics_agent", logistics_agent_node(llm, tools))
+    builder.add_node("logistics_guard", logistics_guard_node)
     builder.add_node("fallback", _fallback_node)
+
+    logistics_routes: dict[str, Any] = {"end": END, "guard": "logistics_guard"}
+    if tools:
+        builder.add_node("logistics_tools", create_logistics_tools_node(tools))
+        builder.add_edge("logistics_tools", "logistics_agent")
+        logistics_routes["tools"] = "logistics_tools"
+    else:
+        logistics_routes["tools"] = END
 
     builder.add_edge(START, "preprocess")
     builder.add_edge("preprocess", "classify")
     builder.add_conditional_edges(
         "classify",
         route_by_intent,
-        {"knowledge": "knowledge", "query": "query", "service": "service", "fallback": "fallback"},
+        {
+            "knowledge": "knowledge",
+            "query": "query",
+            "service": "service",
+            "logistics": "logistics",
+            "fallback": "fallback",
+        },
     )
+    builder.add_edge("logistics", "logistics_agent")
+    builder.add_conditional_edges("logistics_agent", route_logistics, logistics_routes)
+    builder.add_edge("logistics_guard", END)
     for branch in ("knowledge", "query", "service", "fallback"):
         builder.add_edge(branch, END)
 

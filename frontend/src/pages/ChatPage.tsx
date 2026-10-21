@@ -18,6 +18,7 @@ const INTENT_LABELS: Record<string, string> = {
   knowledge: "知识咨询",
   query: "订单查询",
   service: "业务办理",
+  logistics: "物流查询",
   fallback: "兜底/转人工",
 };
 

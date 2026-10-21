@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | 前端 | React + TypeScript + Vite + Ant Design X | 已就绪（Bubble / Sender / ThoughtChain / Welcome） |
 | 后端 | Python 3.11 + FastAPI，SSE 流式 | 已就绪 |
-| 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 意图分类 + 四路分支） | 已就绪 |
+| 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 意图分类 + 五路分支） | 已就绪；logistics 使用 Agent/Tools |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
 | 工具调用 | 对话暴露 `query_order`（订单查询）；工单工具保留在代码中但不再暴露 | 已就绪 |
@@ -97,6 +97,7 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | POST | `/branch/query` | 强制进入订单查询分支（SSE） |
 | POST | `/branch/service` | 强制进入售后业务草稿分支（SSE） |
 | POST | `/branch/service/confirm` | 用户确认后提交业务办理并创建售后工单 |
+| POST | `/branch/logistics` | 强制进入物流 Agent + Tools 分支（SSE） |
 | POST | `/branch/fallback` | 强制进入兜底分支（SSE） |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
@@ -138,15 +139,16 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 点历史消息里的引用/订单/业务草稿标签，面板会切回那一轮的数据。业务办理必须先由用户核对并确认，
 前端不会在生成草稿时自动创建工单。
 
-## 对话路由（四路）
+## 对话路由（五路）
 
-一轮对话在 LangGraph 里固定走：`preprocess → classify → 四路分支`。
+一轮对话在 LangGraph 里固定走：`preprocess → classify → 五路分支`。
 
 | 意图 | HTTP 分支 | 判定（规则兜底） | 分支行为 | 前端事件 |
 | --- | --- | --- | --- | --- |
 | `knowledge` 知识咨询 | `POST /branch/knowledge` | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
 | `query` 订单查询 | `POST /branch/query` | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `OrderService`，不检索 | `order` + `token` |
 | `service` 业务办理 | `POST /branch/service` | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 识别槽位、生成可编辑草稿并提示缺失项；确认后提交 | `service_draft` + `token` |
+| `logistics` 物流查询 | `POST /branch/logistics` | 物流 / 快递 / 配送 / 派送 / 签收 / 包裹 | 物流预处理 → Agent → `query_order` tools → Agent | `tool` + `order` + `token` |
 | `fallback` 兜底 | `POST /branch/fallback` | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
 
 分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
@@ -159,7 +161,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 111 个用例，约 12 秒
+python -m pytest            # 116 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -275,6 +277,7 @@ app
         ├── POST /branch/knowledge
         ├── POST /branch/query
         ├── POST /branch/service
+        ├── POST /branch/logistics
         ├── POST /branch/service/confirm
         └── POST /branch/fallback
 ```

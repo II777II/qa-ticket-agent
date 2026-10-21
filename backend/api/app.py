@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="电商智能助手 POC",
-        description="自然语言提问 -> LLM 意图识别 -> 知识库 / 订单 / 售后草稿 / 兜底四路。",
+        description="自然语言提问 -> LLM 意图识别 -> 知识库 / 订单 / 售后 / 物流 / 兜底五路。",
         version="0.1.0",
         lifespan=lifespan,
     )

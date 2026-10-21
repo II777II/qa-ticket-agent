@@ -30,7 +30,7 @@ export interface ErrorEvent {
 }
 
 export interface IntentEvent {
-  intent: "knowledge" | "query" | "service" | "fallback";
+  intent: "knowledge" | "query" | "service" | "logistics" | "fallback";
   confidence: number;
   reason: string;
   slots: Record<string, string>;

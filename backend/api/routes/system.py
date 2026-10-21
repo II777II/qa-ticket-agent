@@ -69,6 +69,7 @@ async def root():
             "query": "POST /branch/query",
             "service": "POST /branch/service",
             "service_confirm": "POST /branch/service/confirm",
+            "logistics": "POST /branch/logistics",
             "fallback": "POST /branch/fallback",
         },
         "frontend": "还没构建。开发用 npm run dev (5173)，演示用 npm run build 后由本服务托管",

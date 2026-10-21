@@ -282,7 +282,7 @@ class FakeChatModel(BaseChatModel):
             # 本轮没给联系人，就翻历史（这正是多轮记忆的用处之一）
             contact = self._history_contact(messages)
 
-        if "query_order" in available and detect_intent(question) == "order_lookup":
+        if "query_order" in available and detect_intent(question) in {"order_lookup", "logistics"}:
             order_no = ORDER_NO_RE.search(question)
             args = (
                 {"order_no": order_no.group(0).upper()}
