@@ -28,10 +28,14 @@ logger = logging.getLogger("qa_ticket.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.runtime = create_runtime()
+    runtime = create_runtime()
+    app.state.runtime = runtime
     logger.info("后端就绪: http://%s:%s/docs", settings.host, settings.port)
-    yield
-    app.state.runtime = None
+    try:
+        yield
+    finally:
+        runtime.shutdown()
+        app.state.runtime = None
 
 
 def create_app() -> FastAPI:

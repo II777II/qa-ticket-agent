@@ -110,7 +110,20 @@ class ChatService:
         requested_intent 只由显式分支 HTTP 路由传入；统一入口必须传 None，
         以清除同一 thread_id 上一轮留下的强制路由状态。
         """
-        config = {"configurable": {"thread_id": thread_id}}
+        config: dict[str, Any] = {
+            "configurable": {"thread_id": thread_id},
+            "run_name": "qa-ticket.chat",
+            "metadata": {
+                "langfuse_session_id": thread_id,
+                "langfuse_tags": [
+                    "qa-ticket",
+                    f"branch:{requested_intent or 'auto'}",
+                ],
+            },
+        }
+        tracing = self._runtime.tracing
+        if tracing is not None and tracing.handler is not None:
+            config["callbacks"] = [tracing.handler]
         yield EVENT_START, {
             "thread_id": thread_id,
             "provider": settings.llm_provider,

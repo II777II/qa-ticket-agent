@@ -103,7 +103,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | 接口层（数据接口） | `backend/api/routes/knowledge.py`、`orders.py`、`metrics.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
 | 应用层 | `backend/application/` | `runtime.py` 装配；`agent/`（graph / tools / prompts）；`chat/service.py`（一轮对话）；`tickets/service.py`（售后工单）；`orders/service.py`（订单查询）；`knowledge/service.py`（知识库目录） | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 枚举与状态流转/去重规则、`errors.py` 领域异常 | 不改 |
-| 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/`、`observability/`（指标）、`version.py`（git 版本） | 只加一个分支 |
+| 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/`、`observability/`（指标 + 可选 Langfuse）、`version.py` | 只加一个分支 |
 
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
 领域层不 import FastAPI / LangChain；接口层不写业务规则。
@@ -143,6 +143,9 @@ main app
 4. `route_by_intent` 只会进入 knowledge / query / service / fallback 之一；
 5. `/branch/{intent}` 是四个显式 HTTP 入口，会锁定对应分支并跳过再次分类；
 6. 过程中向前端推事件：
+
+Langfuse 启用时，ChatService 会把 `CallbackHandler` 注入 LangGraph 调用配置，并将
+`thread_id` 作为 `langfuse_session_id`；未启用或初始化失败时不注入 callback，主链路继续运行。
 
 | 事件 | 时机 | 载荷 |
 | --- | --- | --- |
@@ -191,6 +194,7 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 | 记忆 | `InMemorySaver`（进程内存） | `BaseCheckpointSaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 检索 | 关键词 IDF 打分 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
+| LLM 可观测性 | 可选 Langfuse CallbackHandler | LangChain callbacks | Langfuse Cloud / 自托管 | `.env: LANGFUSE_ENABLED=true` |
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
 | 编排 | preprocess + classify + 四路分支 + custom 事件 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 

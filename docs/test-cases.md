@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（104 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、异常兜底、检索、存储、工具、接口与整链；
+- **自动化用例**（107 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、异常兜底、Langfuse、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 104 passed in ~12s
+python -m pytest              # 107 passed in ~12s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -107,7 +107,15 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | E-04 | 未知话题兜底 | 问「食堂这周有什么新菜」 | 无引用、无报错、有回答 |
 | E-05 | 订单查询跳过 RAG | 问「帮我查询张三的订单」 | 返回订单，无 citation、无 ticket |
 
-## 七、手工用例（前端，需肉眼确认）
+## 七、Langfuse 可观测性（`test_langfuse.py`）
+
+| 编号 | 用例 | 步骤 | 预期 |
+| --- | --- | --- | --- |
+| L-01 | 默认关闭 | 未设置 `LANGFUSE_ENABLED` | 不导入 SDK、不注入 callback、状态 disabled |
+| L-02 | Key 缺失 | 启用但未配置 Public/Secret Key | 自动降级为关闭，不阻塞对话 |
+| L-03 | Callback 注入 | 使用启用状态的 fake tracing | LangGraph config 含 callback、session_id 与 qa-ticket tag |
+
+## 八、手工用例（前端，需肉眼确认）
 
 | 编号 | 用例 | 步骤 | 预期 |
 | --- | --- | --- | --- |
@@ -132,7 +140,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | M-19 | 意图路由徽标 | 依次输入退款问答、张三订单、商品损坏、我要投诉 | 顶栏路由依次显示：知识咨询 / 订单查询 / 业务办理 / 兜底·转人工 |
 | M-20 | 业务办理确认 | 补齐业务类型、订单号、联系人、描述并勾选确认 | “确认提交”前不可用；提交后显示工单号和状态 |
 
-## 八、需求 → 用例覆盖
+## 九、需求 → 用例覆盖
 
 | 需求（`问答工单.md`） | 覆盖用例 |
 | --- | --- |
@@ -146,7 +154,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 
 权限（RBAC）、Redis、异步任务、监控属于生产化范围，POC 不含对应用例，只保证接口与扩展点预留。
 
-## 九、本轮测试发现并修掉的问题
+## 十、本轮测试发现并修掉的问题
 
 1. **检索阈值过松**：`min_score=0.08` 时，「今天午饭吃什么比较好」都能靠「什么」「比较」命中 2 段工单文档，导致无关问题也带引用。改成「排序分 + 覆盖率（命中查询词权重占比，阈值 0.25）」双重判定，并过滤虚词二元组后，6 个相关问题正常召回、4 个无关问题全部返回空（R-07、G-06、E-04）。
 2. **引用指向文档元信息**：切块把 `# 标题` 与首个 `##` 之间的「更新日期/维护」当成了片段，引用第一行是废话。改成只按二级标题切块（R-02）。

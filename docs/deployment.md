@@ -49,8 +49,27 @@ docker compose -f docker/docker-compose.yml up -d --build
 | 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | 新增 `infrastructure/retrieval/pgvector.py` |
 | 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `infrastructure/llm/factory.py` 加分支 |
 | 会话缓存 / 限流 | `redis` | `REDIS_URL=...` | 新增 |
+| LLM 可观测性 | `langfuse>=5` | `LANGFUSE_ENABLED=true` 等 | `infrastructure/observability/langfuse.py` |
 
 每个分支现在都会抛一个说明性错误（告诉你缺哪个包、要开哪个服务），不会静默降级。
+
+## Langfuse Cloud / 自托管
+
+在 `.env` 配置：
+
+```env
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=pk-lf-xxxx
+LANGFUSE_SECRET_KEY=sk-lf-xxxx
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
+
+- 云端美国区可改为 `https://us.cloud.langfuse.com`。
+- 自托管时填写实际 `LANGFUSE_BASE_URL`。
+- 启用后自动追踪 LangGraph 节点、LLM 与 Retriever；`thread_id` 映射为 session。
+- Langfuse 未启用、缺少 Key 或初始化异常时会自动降级，不影响 SSE 对话。
+- 服务关闭时调用 Langfuse `shutdown()` 刷新后台队列。
+- trace 可能包含用户输入与模型输出，接入生产前应按数据合规要求配置脱敏与访问控制。
 
 ## 电商演示数据
 

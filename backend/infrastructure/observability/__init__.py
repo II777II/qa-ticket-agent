@@ -4,5 +4,11 @@ POC 用进程内统计（重启清零、单实例有效）；生产换成 Promet
 """
 
 from backend.infrastructure.observability.metrics import MetricsCollector, estimate_tokens
+from backend.infrastructure.observability.langfuse import LangfuseTracing, create_langfuse_tracing
 
-__all__ = ["MetricsCollector", "estimate_tokens"]
+__all__ = [
+    "LangfuseTracing",
+    "MetricsCollector",
+    "create_langfuse_tracing",
+    "estimate_tokens",
+]

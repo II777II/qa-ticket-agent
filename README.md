@@ -23,6 +23,7 @@
 | 知识库 | 50 篇 HTML 文章 + 分类/标签目录 | 已就绪（`#/kb`） |
 | 工单存储 | JSON 文件（`backend/data/tickets.json`） | 已就绪 |
 | 订单存储 | JSON 演示数据（字段按 Postgres 表形状） | 已就绪，`ORDER_STORE=postgres` 为升级开关 |
+| 可观测性 | Langfuse v5 + LangChain CallbackHandler | 可选，默认关闭；支持 Cloud/自托管 |
 | 部署 | 本地 uvicorn + `npm run dev`；Docker Compose 预留 | docker/ 目录已放好落点 |
 
 四个扩展点（LLM / 工具 / 记忆 / 检索）都走工厂 + 配置，业务代码只依赖 LangChain 标准接口，
@@ -72,6 +73,20 @@ python -m uvicorn backend.api.app:app --port 5179
 `127.0.0.1:5179`（见 [frontend/vite.config.ts](frontend/vite.config.ts)）。浏览器始终同源，
 所以 SSE 不受 CORS 约束，后端的 `CORS_ORIGINS` 只作为「绕过代理直连后端」的兜底。
 想直连后端时，在前端目录建 `.env.local` 写 `VITE_API_BASE=http://127.0.0.1:5179` 即可。
+
+## Langfuse 可观测性（可选）
+
+在 `.env` 填入：
+
+```env
+LANGFUSE_ENABLED=true
+LANGFUSE_PUBLIC_KEY=pk-lf-xxxx
+LANGFUSE_SECRET_KEY=sk-lf-xxxx
+LANGFUSE_BASE_URL=https://cloud.langfuse.com
+```
+
+自托管时把 `LANGFUSE_BASE_URL` 改为自己的 Langfuse 地址。启用后，LangGraph 节点、LLM、
+Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或上报失败不会影响问答主链路。
 
 ## 接口
 
@@ -144,7 +159,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 104 个用例，约 12 秒
+python -m pytest            # 107 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -215,6 +230,7 @@ backend/
     memory/            短期记忆（checkpointer）工厂
     retrieval/         进程内检索（切块 + IDF 打分 + 拼参考资料）与工厂
     persistence/       工单/订单 JSON 存储、知识库目录与工厂
+    observability/     进程内指标 + 可选 Langfuse tracing
   api/                 接口层
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
     deps.py            依赖取用点（从 app.state 取运行时与用例）

@@ -21,7 +21,11 @@ from backend.application.tickets import TicketService
 from backend.infrastructure.config import settings
 from backend.infrastructure.llm import create_llm
 from backend.infrastructure.memory import create_checkpointer
-from backend.infrastructure.observability import MetricsCollector
+from backend.infrastructure.observability import (
+    LangfuseTracing,
+    MetricsCollector,
+    create_langfuse_tracing,
+)
 from backend.infrastructure.persistence import create_ticket_store
 from backend.infrastructure.persistence.factory import create_knowledge_catalog, create_order_store
 from backend.infrastructure.retrieval import create_retriever
@@ -43,6 +47,7 @@ class AgentRuntime:
     retriever: Any | None = None
     checkpointer: Any | None = None
     store: Any | None = None
+    tracing: LangfuseTracing | None = None
 
     def describe(self) -> dict[str, Any]:
         return {
@@ -58,7 +63,12 @@ class AgentRuntime:
             "checkpointer": settings.checkpointer if self.checkpointer else None,
             "retriever": settings.retriever if self.retriever else None,
             "ticket_store": settings.ticket_store if self.store else None,
+            "langfuse": self.tracing.status if self.tracing else "disabled",
         }
+
+    def shutdown(self) -> None:
+        if self.tracing is not None:
+            self.tracing.shutdown()
 
 
 def create_runtime() -> AgentRuntime:
@@ -71,6 +81,7 @@ def create_runtime() -> AgentRuntime:
     store = create_ticket_store()
     tickets = TicketService(store)
     metrics = MetricsCollector()
+    tracing = create_langfuse_tracing()
     orders = OrderService(create_order_store())
     knowledge = KnowledgeService(create_knowledge_catalog())
     # 对话侧只暴露订单查询；售后工单不再进入 Agent（代码保留，可通过 include_tickets=True 恢复）
@@ -94,6 +105,7 @@ def create_runtime() -> AgentRuntime:
             "kb_chunks": retriever.chunk_count() if hasattr(retriever, "chunk_count") else 0,
             "ticket_store": settings.ticket_store,
             "tickets": store.count(),
+            "langfuse": tracing.status,
         },
     )
     return AgentRuntime(
@@ -107,4 +119,5 @@ def create_runtime() -> AgentRuntime:
         retriever=retriever,
         checkpointer=checkpointer,
         store=store,
+        tracing=tracing,
     )

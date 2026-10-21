@@ -25,6 +25,7 @@ os.environ["CHECKPOINTER"] = "memory"
 os.environ["RETRIEVER"] = "memory"
 os.environ["TICKET_STORE"] = "json"
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="qa-ticket-test-")
+os.environ["LANGFUSE_ENABLED"] = "false"
 
 from backend.application.runtime import AgentRuntime, create_runtime  # noqa: E402
 from backend.domain import TicketCreate  # noqa: E402

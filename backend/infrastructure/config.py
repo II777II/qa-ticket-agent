@@ -47,6 +47,13 @@ def _env_float(name: str, default: float) -> float:
         return default
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    value = _env(name)
+    if not value:
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass(frozen=True)
 class Settings:
     """运行时配置（不可变，避免各层偷偷改全局状态）。"""
@@ -113,6 +120,12 @@ class Settings:
     vector_db_url: str = _env("VECTOR_DB_URL")
     embed_model: str = _env("EMBED_MODEL")
 
+    # ---------- Langfuse 可观测性（默认关闭，失败时不影响主链路）----------
+    langfuse_enabled: bool = _env_bool("LANGFUSE_ENABLED", False)
+    langfuse_public_key: str = _env("LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key: str = _env("LANGFUSE_SECRET_KEY")
+    langfuse_base_url: str = _env("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+
     @property
     def mock_mode(self) -> bool:
         """演示模式：没有 API Key 也能跑通全链路。"""
@@ -121,6 +134,10 @@ class Settings:
     @property
     def ticket_store_file(self) -> Path:
         return self.data_dir / "tickets.json"
+
+    @property
+    def langfuse_configured(self) -> bool:
+        return bool(self.langfuse_public_key and self.langfuse_secret_key)
 
 
 settings = Settings()
