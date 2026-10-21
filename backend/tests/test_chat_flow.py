@@ -9,14 +9,12 @@ from backend.application.runtime import AgentRuntime
 
 
 async def _collect(runtime: AgentRuntime, message: str, thread: str) -> dict:
-    collected = {"text": "", "tools": [], "tickets": [], "orders": [], "citations": [], "errors": []}
+    collected = {"text": "", "tools": [], "orders": [], "citations": [], "errors": []}
     async for event, payload in ChatService(runtime).stream(message, thread):
         if event == "token":
             collected["text"] += payload["text"]
         elif event == "tool":
             collected["tools"].append(payload)
-        elif event == "ticket":
-            collected["tickets"].extend(payload["tickets"])
         elif event == "order":
             collected["orders"].extend(payload["orders"])
         elif event == "citation":
@@ -39,13 +37,11 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     assert not consulted["errors"]
     assert consulted["citations"], "应命中知识库并回传引用"
     assert "[1]" in consulted["text"]
-    assert not consulted["tickets"]
 
     # 2. 订单查询：走 query_order，不出引用、不建单
     ordered = _turn(runtime, "帮我查询张三的订单", thread)
     assert ordered["orders"], "应返回张三的订单"
     assert not ordered["citations"]
-    assert not ordered["tickets"]
 
     # 5. 多轮追问：上下文累积且仍能检索
     followup = _turn(runtime, "那发票怎么开？", thread)
@@ -54,11 +50,10 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     assert len(state["messages"]) >= 6
 
 
-def test_ticket_request_does_not_create_ticket(isolated_runtime: AgentRuntime) -> None:
+def test_service_request_builds_draft_without_creating_ticket(isolated_runtime: AgentRuntime) -> None:
     """对话侧已不开放售后工单：即使用户要求建单，也不应创建工单。"""
     result = _turn(isolated_runtime, "帮我建个工单，商品有质量问题", "flow-2")
     assert not any(tool["name"] == "create_ticket" for tool in result["tools"])
-    assert result["tickets"] == []
     assert "草稿" in result["text"]
 
 
@@ -89,5 +84,4 @@ def test_order_query_uses_tool_without_rag(isolated_runtime: AgentRuntime) -> No
     result = _turn(isolated_runtime, "帮我查询张三的订单", "flow-order")
     assert result["orders"]
     assert result["citations"] == []
-    assert result["tickets"] == []
     assert "SO" in result["text"]

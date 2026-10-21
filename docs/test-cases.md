@@ -75,8 +75,8 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-03 | 根路径 | `GET /` | 200，Content-Type 为 html（已构建）或 json（未构建） |
 | A-04 | 旧工单接口已卸载 | `GET /api/tickets` 与详情路径 | 均返回 404 |
 | A-05 | 路由装配 | 读取 OpenAPI paths | 含 `/chat`、四个 `/branch/*` 与 `/branch/service/confirm`，不含 `/api/tickets` |
-| A-06 | SSE 事件契约（咨询） | 流式问「退款多久到账」 | 序列以 start 开头、done 结尾，含 token 与 citation，**不含** tool/ticket，正文含 `[1]` |
-| A-07 | 对话不建工单 | 流式说「帮我建个工单」 | 不出现 create_ticket 或 ticket 事件 |
+| A-06 | SSE 事件契约（咨询） | 流式问「退款多久到账」 | 序列以 start 开头、done 结尾，含 token 与 citation，不含 tool，正文含 `[1]` |
+| A-07 | 对话不建工单 | 流式说「帮我建个工单」 | 只生成 service_draft，不创建工单 |
 | A-08 | 空消息拦截 | `POST /chat` 传空 message | 422，不进图 |
 | A-09 | 订单 SSE | `POST /chat` 问「帮我查询张三的订单」 | intent=query，含 order、无 citation |
 | A-10 | 五路显式 HTTP 入口 | 同一句分别请求五个业务 `/branch/*` | intent 等于 knowledge / query / service / logistics / fallback |

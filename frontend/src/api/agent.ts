@@ -18,7 +18,6 @@ import type {
   ServiceConfirmResult,
   ServiceDraft,
   StreamHandlers,
-  Ticket,
 } from "../types";
 
 /** 默认空字符串 = 同源（走 Vite 代理）。需要直连后端时设 VITE_API_BASE=http://127.0.0.1:5179 */
@@ -44,14 +43,6 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getAgentInfo(): Promise<AgentInfo> {
   return requestJson<AgentInfo>("/api/agent-info");
-}
-
-export function listTickets(): Promise<Ticket[]> {
-  return requestJson<Ticket[]>("/api/tickets?limit=50");
-}
-
-export function getTicket(ticketId: string): Promise<Ticket> {
-  return requestJson<Ticket>(`/api/tickets/${encodeURIComponent(ticketId)}`);
 }
 
 export function searchKnowledge(query: string, topK = 5): Promise<KnowledgeHit[]> {
@@ -184,9 +175,6 @@ function dispatch(
         ok: payload.ok === undefined ? undefined : Boolean(payload.ok),
         message: optionalText(payload.message),
       });
-      break;
-    case "ticket":
-      handlers.onTicket?.((payload.tickets ?? []) as Ticket[]);
       break;
     case "order":
       handlers.onOrder?.((payload.orders ?? []) as unknown as OrderSummary[]);

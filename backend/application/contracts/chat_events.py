@@ -4,7 +4,6 @@
     intent    意图识别结果（意图/置信度/原因/槽位）
     token     模型输出增量
     tool      工具调用与返回
-    ticket    产生或查到的工单
     order     查到的订单（query_order 结果）
     service_draft 业务办理草稿与缺失槽位
     citation  检索引用
@@ -22,7 +21,6 @@ EVENT_INTENT = "intent"
 EVENT_TOKEN = "token"
 EVENT_TOOL = "tool"
 EVENT_CITATION = "citation"
-EVENT_TICKET = "ticket"
 EVENT_ORDER = "order"
 EVENT_SERVICE_DRAFT = "service_draft"
 EVENT_DONE = "done"

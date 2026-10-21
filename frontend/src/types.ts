@@ -71,27 +71,6 @@ export interface ServiceConfirmResult {
   message: string;
 }
 
-export interface TicketEvent {
-  at: string;
-  action: string;
-  note: string;
-  actor: string;
-}
-
-export interface Ticket {
-  id: string;
-  title: string;
-  description: string;
-  category: string;
-  priority: string;
-  contact: string;
-  status: string;
-  source: string;
-  created_at: string;
-  updated_at: string;
-  events: TicketEvent[];
-}
-
 export interface AgentInfo {
   status: string;
   provider: string;
@@ -123,7 +102,6 @@ export interface ChatMessage {
   loading?: boolean;
   error?: string;
   tools: ToolCallView[];
-  tickets: Ticket[];
   orders: OrderSummary[];
   citations: CitationEvent[];
   intent?: IntentEvent;
@@ -134,7 +112,6 @@ export interface StreamHandlers {
   onStart?: (event: StartEvent) => void;
   onToken?: (text: string) => void;
   onTool?: (event: ToolEvent) => void;
-  onTicket?: (tickets: Ticket[]) => void;
   onOrder?: (orders: OrderSummary[]) => void;
   onIntent?: (event: IntentEvent) => void;
   onServiceDraft?: (draft: ServiceDraft) => void;

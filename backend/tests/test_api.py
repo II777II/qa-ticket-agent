@@ -184,7 +184,7 @@ def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
     assert names[-1] == "done"
     assert "token" in names
     assert "citation" in names
-    assert "tool" not in names and "ticket" not in names
+    assert "tool" not in names
 
     start = events[0][1]
     assert start["thread_id"] == "api-2"
@@ -213,13 +213,13 @@ def test_builtin_event_source_response_headers(isolated_runtime: AgentRuntime) -
     assert buffering == "no"
 
 
-def test_chat_does_not_create_tickets(isolated_runtime: AgentRuntime) -> None:
-    """对话侧不再提供售后工单工具。"""
+def test_service_request_does_not_create_ticket_before_confirmation(isolated_runtime: AgentRuntime) -> None:
+    """service 分支只生成草稿，不直接创建工单。"""
     _prepare(isolated_runtime)
     events = asyncio.run(_stream_chat("帮我建个售后工单，商品有质量问题，联系我 wang.wu@corp.com", "api-3"))
     tools = [(payload["phase"], payload["name"]) for name, payload in events if name == "tool"]
     assert not any(name == "create_ticket" for _, name in tools)
-    assert not any(name == "ticket" for name, _ in events)
+    assert isolated_runtime.tickets.count() == 0
 
 
 def test_chat_rejects_empty_message(isolated_runtime: AgentRuntime) -> None:
@@ -261,7 +261,6 @@ def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
     events = asyncio.run(_stream_chat("帮我查询张三的订单", "api-order"))
     names = [name for name, _ in events]
     assert "citation" not in names
-    assert "ticket" not in names
     assert "order" in names
     intents = [payload for name, payload in events if name == "intent"]
     assert intents and intents[-1]["intent"] == "query"
@@ -286,7 +285,6 @@ def test_service_chat_returns_editable_draft_without_writing(isolated_runtime: A
     assert draft["contact"] == "13800138000"
     assert draft["service_type"] == "换货"
     assert draft["requires_confirmation"] is True
-    assert "ticket" not in [name for name, _ in events]
     assert isolated_runtime.tickets.count() == 0
 
 

@@ -8,7 +8,6 @@ from backend.application.contracts.chat_events import (
     EVENT_ORDER,
     EVENT_SERVICE_DRAFT,
     EVENT_START,
-    EVENT_TICKET,
     EVENT_TOKEN,
     EVENT_TOOL,
 )
@@ -21,7 +20,6 @@ __all__ = [
     "EVENT_ORDER",
     "EVENT_SERVICE_DRAFT",
     "EVENT_START",
-    "EVENT_TICKET",
     "EVENT_TOKEN",
     "EVENT_TOOL",
 ]

@@ -157,14 +157,13 @@ Langfuse 启用时，ChatService 会把 `CallbackHandler` 注入 LangGraph 调�
 | `order` | 订单查询完成 | `orders[]` |
 | `service_draft` | 业务草稿生成 | 槽位、缺失项、ready、`requires_confirmation` |
 | `tool` | 工具被调用 / 返回 | `phase=call\|result`、`name`、`ok`、`message` |
-| `ticket` | 工具产出工单 | `tickets[]`（完整工单） |
 | `citation` | 本轮检索命中 | `index` / `source` / `title` / `snippet` / `score` |
 | `done` / `error` | 一轮结束 | —— |
 
 7. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
 8. 前端把 `order` / `citation` / `service_draft` 渲染成气泡底部标签，并切换右侧对应面板；
 9. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
-10. `ticket` 与 `tool` 事件名仍保留在契约中，但当前对话分支不会产生。
+10. 对话事件契约不包含工单写入；工单只在 service-actions 的 JSON 响应中返回。
 
 SSE 响应由 FastAPI 内置的 `EventSourceResponse + ServerSentEvent` 编码；
 路由函数以异步生成器产出 `ServerSentEvent`，并通过 `response_class=EventSourceResponse`

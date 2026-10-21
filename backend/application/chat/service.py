@@ -1,7 +1,7 @@
 """对话用例：驱动图执行，并把图内动作翻译成对外的领域事件。
 
 一次问答的完整用例都在这里：调用图、把模型增量 / 工具调用 / 建单 / 引用
-翻译成 token、tool、ticket、citation 事件。HTTP 的 SSE 与命令行验收脚本消费同一套事件，
+翻译成 token、tool、order、service_draft、citation 事件。HTTP 的 SSE 与 CLI 消费同一套事件，
 所以「页面上看到的」和「命令行看到的」行为一致。
 
 事件常量定义在 application/contracts，这一层只负责产生事件，不负责编码 SSE。
@@ -22,7 +22,6 @@ from backend.application.contracts import (
     EVENT_INTENT,
     EVENT_ORDER,
     EVENT_START,
-    EVENT_TICKET,
     EVENT_TOKEN,
     EVENT_TOOL,
 )
@@ -82,10 +81,6 @@ def _tool_events(update: Any) -> Iterator[tuple[str, dict[str, Any]]]:
                 "message": (payload or {}).get("message") or ("" if ok else str(item.content)[:200]),
             }
             data = payload or {}
-            # 建单返回单数 ticket，查询返回 tickets 列表，这里统一成列表发给前端
-            tickets = data.get("tickets") or ([data["ticket"]] if data.get("ticket") else None)
-            if tickets:
-                yield EVENT_TICKET, {"tickets": tickets}
             orders = data.get("orders")
             if orders:
                 yield EVENT_ORDER, {"orders": orders}

@@ -12,7 +12,6 @@ import type {
   IntentEvent,
   OrderSummary,
   ServiceDraft,
-  Ticket,
   ToolCallView,
   ToolEvent,
 } from "../types";
@@ -22,7 +21,7 @@ function newKey(prefix: string): string {
 }
 
 function emptyMessage(role: ChatMessage["role"], key: string): ChatMessage {
-  return { key, role, content: "", tools: [], tickets: [], orders: [], citations: [] };
+  return { key, role, content: "", tools: [], orders: [], citations: [] };
 }
 
 /** 工具事件落成界面条目：call 新建一条，result 挂到同名的那条上 */
@@ -40,12 +39,6 @@ function mergeTool(tools: ToolCallView[], event: ToolEvent): ToolCallView[] {
   );
 }
 
-function mergeTickets(current: Ticket[], incoming: Ticket[]): Ticket[] {
-  const byId = new Map(current.map((ticket) => [ticket.id, ticket]));
-  incoming.forEach((ticket) => byId.set(ticket.id, ticket));
-  return [...byId.values()];
-}
-
 function mergeOrders(current: OrderSummary[] = [], incoming: OrderSummary[]): OrderSummary[] {
   const byNo = new Map(current.map((order) => [order.order_no, order]));
   incoming.forEach((order) => byNo.set(order.order_no, order));
@@ -56,7 +49,7 @@ export interface UseChatResult {
   messages: ChatMessage[];
   busy: boolean;
   threadId: string;
-  send: (text: string, onTicket?: (tickets: Ticket[]) => void) => Promise<void>;
+  send: (text: string) => Promise<void>;
   stop: () => void;
   reset: () => void;
   updateServiceDraft: (messageKey: string, draft: ServiceDraft) => void;
@@ -75,7 +68,7 @@ export function useChat(): UseChatResult {
   const controllerRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
-    async (text: string, onTicket?: (tickets: Ticket[]) => void) => {
+    async (text: string) => {
       const question = text.trim();
       if (!question || busy) return;
 
@@ -101,10 +94,6 @@ export function useChat(): UseChatResult {
               patch((message) => ({ ...message, content: message.content + token, loading: false })),
             onTool: (event) =>
               patch((message) => ({ ...message, loading: false, tools: mergeTool(message.tools, event) })),
-            onTicket: (tickets) => {
-              patch((message) => ({ ...message, loading: false, tickets: mergeTickets(message.tickets, tickets) }));
-              onTicket?.(tickets);
-            },
             onOrder: (orders) =>
               patch((message) => ({ ...message, loading: false, orders: mergeOrders(message.orders, orders) })),
             onIntent: (intent: IntentEvent) => patch((message) => ({ ...message, intent })),
