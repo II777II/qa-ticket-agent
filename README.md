@@ -218,7 +218,7 @@ backend/
   domain/              领域层：工单实体（models.py）、业务规则（rules.py）、领域异常（errors.py）
   application/         应用层
     runtime.py         装配：调工厂拼出运行时（不含业务动作）
-    agent/             Agent 关注点：graph.py（编排）、tools.py（工具适配）、prompts.py（提示词）
+    agent/             graph.py（意图、提示词、五路与物流循环）、tools.py（工具适配）
     chat/service.py    用例：一轮对话（驱动图 + 翻译 token/order/service_draft/citation 事件）
     contracts/         跨 Agent/Chat/API 的对话事件契约（EVENT_*）
     tickets/service.py 用例：确认后创建工单与计数

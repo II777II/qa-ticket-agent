@@ -101,7 +101,7 @@ flowchart TD
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `app.py` 组装、`routes/`（dialogue / service / resources / system）、`schemas.py` | 不改 |
 | 接口层（数据接口） | `backend/api/routes/resources.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
-| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/` 编排；`chat/service.py` 对话用例；`contracts/chat_events.py` 共享事件；`tickets` / `orders` / `knowledge` 业务用例 | 加用例不改图 |
+| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/graph.py` 编排；`chat/service.py` 对话用例；`contracts/chat_events.py` 共享事件；`tickets` / `orders` / `knowledge` 业务用例 | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 分类/优先级/去重/单号规则 | 不改 |
 | 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/store.py`、`observability/`、`version.py` | 只加一个分支 |
 

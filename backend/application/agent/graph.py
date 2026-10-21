@@ -19,17 +19,9 @@ from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import END, START, MessagesState, StateGraph
+from langgraph.prebuilt import ToolNode
 from langgraph.types import StreamWriter
 
-from backend.application.agent.classifier import classify_intent
-from backend.application.agent.logistics import (
-    create_logistics_tools_node,
-    logistics_agent_node,
-    logistics_guard_node,
-    logistics_prepare_node,
-    route_logistics,
-)
-from backend.application.agent.prompts import SYSTEM_PROMPT
 from backend.application.contracts import (
     EVENT_CITATION,
     EVENT_INTENT,
@@ -39,16 +31,32 @@ from backend.application.contracts import (
 from backend.application.orders import OrderService
 from backend.application.orders.service import order_summary
 from backend.domain.intent import (
+    IntentResult,
     IntentName,
     ORDER_NO_RE,
     extract_order_keyword,
     extract_service_slots,
     guess_category,
+    rule_classify,
 )
+from backend.infrastructure.config import settings
 from backend.infrastructure.retrieval.in_memory import format_context
 
 INTENTS = {"knowledge", "query", "service", "logistics", "fallback"}
 TRANSFER_HINTS = ("转人工", "人工客服", "找人工", "客服电话", "投诉", "差评")
+MAX_LOGISTICS_STEPS = 4
+
+CLASSIFIER_PROMPT = """你是电商客服意图分类器。只分到以下五类之一：
+knowledge（规则/流程咨询）、query（查询具体订单）、service（售后业务办理）、
+logistics（物流/快递/配送查询）、fallback（闲聊、投诉或转人工）。
+只输出 IntentResult JSON，不要 Markdown。"""
+
+SYSTEM_PROMPT = """你是电商平台智能客服。优先根据帮助中心资料回答并标引用编号；
+不要编造订单、物流或规则。信息不足时先追问。当前售后不会直接建单，只有用户在右侧确认后才提交。"""
+
+LOGISTICS_SYSTEM_PROMPT = """你是电商物流查询助手。用户提供订单号、姓名或手机号时调用
+query_order 查询真实状态；有工具结果后简洁总结，不输出原始 JSON，不编造物流单号。
+信息不足时先追问，一次回答最多调用 2 次工具。"""
 
 
 class AgentState(MessagesState):
@@ -83,6 +91,58 @@ def _as_text(content: Any) -> str:
     return str(content)
 
 
+def _classify_intent(question: str, llm: BaseChatModel) -> IntentResult:
+    if settings.mock_mode:
+        return rule_classify(question)
+    try:
+        result = llm.with_structured_output(IntentResult).invoke(
+            [SystemMessage(content=CLASSIFIER_PROMPT), HumanMessage(content=question)]
+        )
+        if isinstance(result, IntentResult):
+            return result
+        if isinstance(result, dict):
+            return IntentResult(**result)
+    except Exception:
+        pass
+    return rule_classify(question)
+
+
+def _logistics_prepare(state: AgentState) -> dict[str, Any]:
+    slots = dict(state.get("slots") or {})
+    match = ORDER_NO_RE.search(state.get("question") or "")
+    if match:
+        slots["order_no"] = match.group(0).upper()
+    return {"slots": slots, "logistics_steps": 0}
+
+
+def _logistics_agent_node(
+    llm: BaseChatModel,
+    tools: Sequence[BaseTool],
+) -> Callable[[AgentState], dict[str, Any]]:
+    model = llm.bind_tools(list(tools)) if tools else llm
+
+    def node(state: AgentState) -> dict[str, Any]:
+        history = [message for message in state["messages"] if not isinstance(message, SystemMessage)]
+        answer = model.invoke([SystemMessage(content=LOGISTICS_SYSTEM_PROMPT), *history])
+        return {
+            "messages": [answer],
+            "logistics_steps": int(state.get("logistics_steps", 0)) + 1,
+        }
+
+    return node
+
+
+def _route_logistics(state: AgentState) -> str:
+    last = state["messages"][-1] if state.get("messages") else None
+    if not isinstance(last, AIMessage) or not last.tool_calls:
+        return "end"
+    return "guard" if int(state.get("logistics_steps", 0)) >= MAX_LOGISTICS_STEPS else "tools"
+
+
+def _logistics_guard_node(_state: AgentState) -> dict[str, Any]:
+    return {"messages": [AIMessage(content="物流查询步骤过多，请补充订单号后重试。")]}
+
+
 def route_by_intent(state: AgentState) -> str:
     """一级意图路由：只允许四个合法分支，未知意图走兜底。"""
     intent = state.get("intent", "fallback")
@@ -111,7 +171,7 @@ def _classify_node(llm: BaseChatModel) -> Callable[[AgentState, StreamWriter], d
                 "slots": {},
             }
         else:
-            result = classify_intent(question, llm)
+            result = _classify_intent(question, llm)
             output = {
                 "intent": result.intent,
                 "confidence": result.confidence,
@@ -300,14 +360,14 @@ def build_graph(
     builder.add_node("knowledge", _knowledge_node(llm, retriever, system_prompt))
     builder.add_node("query", _query_node(order_service))
     builder.add_node("service", _service_node)
-    builder.add_node("logistics", logistics_prepare_node)
-    builder.add_node("logistics_agent", logistics_agent_node(llm, tools))
-    builder.add_node("logistics_guard", logistics_guard_node)
+    builder.add_node("logistics", _logistics_prepare)
+    builder.add_node("logistics_agent", _logistics_agent_node(llm, tools))
+    builder.add_node("logistics_guard", _logistics_guard_node)
     builder.add_node("fallback", _fallback_node)
 
     logistics_routes: dict[str, Any] = {"end": END, "guard": "logistics_guard"}
     if tools:
-        builder.add_node("logistics_tools", create_logistics_tools_node(tools))
+        builder.add_node("logistics_tools", ToolNode(list(tools)))
         builder.add_edge("logistics_tools", "logistics_agent")
         logistics_routes["tools"] = "logistics_tools"
     else:
@@ -327,7 +387,7 @@ def build_graph(
         },
     )
     builder.add_edge("logistics", "logistics_agent")
-    builder.add_conditional_edges("logistics_agent", route_logistics, logistics_routes)
+    builder.add_conditional_edges("logistics_agent", _route_logistics, logistics_routes)
     builder.add_edge("logistics_guard", END)
     for branch in ("knowledge", "query", "service", "fallback"):
         builder.add_edge(branch, END)
