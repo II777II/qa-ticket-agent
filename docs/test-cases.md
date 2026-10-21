@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（85 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、40 条固定评测集、Token usage 聚合、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
+- **自动化用例**（86 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、40 条固定评测集、Token usage 聚合、健康降级、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 85 passed in ~3s
+python -m pytest              # 86 passed in ~3s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -60,7 +60,8 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 
 | 编号 | 用例 | 步骤 | 预期 |
 | --- | --- | --- | --- |
-| A-01 | 健康检查 | `GET /health` | 200，provider=mock，checkpointer=memory |
+| A-01 | 健康检查 | `GET /health` | 200，status=ok、missing=[]，provider=mock，checkpointer=memory |
+| A-01b | 健康检查字段缺失 | describe 缺少 checkpointer/retriever/ticket_store | 200，status=degraded，missing 列出缺项，不抛 500 |
 | A-02 | 能力查询 | `GET /api/agent-info` | 200，kb_documents=50、orders=50，扩展信息含 Compose 预留 |
 | A-03 | 根路径 | `GET /` | 200，Content-Type 为 html（已构建）或 json（未构建） |
 | A-04 | 旧工单接口已卸载 | `GET /api/tickets` 与详情路径 | 均返回 404 |

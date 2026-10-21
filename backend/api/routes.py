@@ -78,10 +78,14 @@ async def confirm_service(req: ServiceConfirmRequest, runtime: AgentRuntime = De
 @router.get("/health", tags=["system"])
 async def health(runtime: AgentRuntime = Depends(get_runtime)):
     info = runtime.describe()
-    return {
-        key: info[key]
-        for key in ("provider", "mock", "checkpointer", "retriever", "ticket_store")
-    } | {"status": "ok"}
+    allowed = ("provider", "mock", "checkpointer", "retriever", "ticket_store")
+    payload = {key: info.get(key) for key in allowed}
+    required = ("provider", "checkpointer", "retriever", "ticket_store")
+    missing = [key for key in required if not payload.get(key)]
+    return payload | {
+        "status": "ok" if not missing else "degraded",
+        "missing": missing,
+    }
 
 
 @router.get("/api/agent-info", tags=["system"])

@@ -95,7 +95,7 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | POST | `/chat` | 统一流式对话入口（SSE），自动执行 LLM 意图识别并分流 |
 | POST | `/branch/service/confirm` | 用户确认后提交业务办理并创建售后工单 |
 | POST | `/api/llm/config` | 设置 DeepSeek/OpenAI API Key，验证后动态切换模型 |
-| GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
+| GET | `/health` | 健康检查，返回白名单运行状态及 `ok/degraded + missing` |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
 | GET | `/api/kb/search?q=&top_k=` | 知识库检索命中（来源、小节、片段、相关度），供右侧知识面板 |
 | GET | `/api/kb/articles?q=&category=` | 知识库文章列表（目录/分类/关键字） |
@@ -161,7 +161,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 85 个用例，约 3 秒
+python -m pytest            # 86 个用例，约 3 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -240,7 +240,7 @@ docs/
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
   interview-notes.md   30 秒陈述与高频追问应对
   deployment.md        三种跑法、compose 升级步骤、日志与排查
-  test-cases.md        85 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
+  test-cases.md        86 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
 ```
 

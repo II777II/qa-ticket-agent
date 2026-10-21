@@ -66,6 +66,19 @@ def test_health(isolated_runtime: AgentRuntime) -> None:
     assert body["status"] == "ok"
     assert body["provider"] == "mock"
     assert body["checkpointer"] == "memory"
+    assert body["status"] == "ok"
+    assert body["missing"] == []
+
+
+def test_health_degrades_when_runtime_fields_are_missing() -> None:
+    class IncompleteRuntime:
+        def describe(self):
+            return {"provider": "mock", "mock": True}
+
+    _prepare(IncompleteRuntime())
+    body = asyncio.run(_get("/health")).json()
+    assert body["status"] == "degraded"
+    assert body["missing"] == ["checkpointer", "retriever", "ticket_store"]
 
 
 def test_agent_info_reports_capabilities(isolated_runtime: AgentRuntime) -> None:
