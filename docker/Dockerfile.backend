@@ -1,5 +1,15 @@
-# POC 阶段不强制上容器：本地 uvicorn 跑得更快。
-# 这个文件是给「后续 compose 升级」预留的落点，构建上下文是项目根目录。
+# syntax=docker/dockerfile:1
+
+FROM node:22-alpine AS frontend-build
+
+WORKDIR /app/frontend
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend/ ./
+RUN npm run build
+
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -8,11 +18,15 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# 依赖单独一层，改代码不用重装依赖
 COPY requirements.txt ./
 RUN pip install -r requirements.txt
 
-COPY backend ./backend
+RUN addgroup --system app && adduser --system --ingroup app app
+
+COPY --chown=app:app backend ./backend
+COPY --chown=app:app --from=frontend-build /app/frontend/dist ./frontend/dist
+
+USER app
 
 EXPOSE 5179
 

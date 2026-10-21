@@ -29,13 +29,27 @@ python -m uvicorn backend.api.app:app --port 5179
 产物不存在时 `/` 会返回一段 JSON 说明，方便判断是不是忘了构建。
 换目录用 `FRONTEND_DIST` 环境变量指定。
 
-### 3. 单机容器：Docker Compose（已预留，POC 未启用）
+### 3. 单机容器：Docker Compose（单后端容器）
 
 ```powershell
 docker compose -f docker/docker-compose.yml up -d --build
+docker compose -f docker/docker-compose.yml ps
 ```
 
-`docker/docker-compose.yml` 里 backend 服务可直接用，postgres + pgvector、redis、独立前端是注释块。
+镜像采用两个阶段：
+
+1. `node:22-alpine` 构建 `frontend/dist`。
+2. `python:3.11-slim` 安装后端依赖，并复制 `backend/` 与前端产物。
+
+FastAPI 继续同源托管 `/` 和 `/assets/*`，容器只暴露 `5179`：
+
+```text
+http://127.0.0.1:5179/
+http://127.0.0.1:5179/docs
+```
+
+Compose 使用可选的上层 `.env`，文件不存在时仍以 Mock/JSON 默认值启动，并配置容器健康检查。
+构建上下文由根目录 `.dockerignore` 排除 `.env`、Node 依赖、测试、脚本和缓存。
 
 ## 生产化升级的具体步骤
 
@@ -45,7 +59,7 @@ docker compose -f docker/docker-compose.yml up -d --build
 | --- | --- | --- | --- |
 | 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `infrastructure/llm.py` 的 `create_checkpointer()` 已留分支 |
 | 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 在 `infrastructure/storage.py` 增加 Postgres 仓储类 |
-| 订单入库 | `sqlalchemy`、`psycopg[binary]` | `ORDER_STORE=postgres` | 按 `docs/sql/postgres_schema.sql` 建表，新增 `postgres_order_store.py` 满足 `OrderStore` 协议 |
+| 订单入库 | `sqlalchemy`、`psycopg[binary]` | `ORDER_STORE=postgres` | 按 `docs/sql/postgres_schema.sql` 建表，在 `infrastructure/storage.py` 增加 Postgres 仓储 |
 | 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | `infrastructure/retrieval.py` 增加 pgvector 实现 |
 | 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `infrastructure/llm.py` 的 `create_llm()` 加分支 |
 | 会话缓存 / 限流 | `redis` | `REDIS_URL=...` | 新增 |
