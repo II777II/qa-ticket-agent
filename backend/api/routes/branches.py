@@ -1,21 +1,19 @@
-"""Agent 五路分支路由：knowledge / query / service / logistics / fallback。"""
+"""显式意图分支路由：knowledge / query / service / logistics / fallback。"""
 
 from __future__ import annotations
 
 from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.responses import EventSourceResponse
 from fastapi.sse import ServerSentEvent
 
-from backend.api.deps import get_chat, get_runtime
-from backend.api.schemas import ChatRequest, ServiceConfirmRequest, ServiceConfirmResponse
+from backend.api.deps import get_chat
+from backend.api.schemas import ChatRequest
 from backend.api.streaming import stream_events
 from backend.application.chat import ChatService
-from backend.application.runtime import AgentRuntime
-from backend.domain import TicketCreate
 
-router = APIRouter(prefix="/branch", tags=["agent-routes"])
+router = APIRouter(prefix="/branch", tags=["intent-branches"])
 
 
 @router.post("/knowledge", summary="知识库问答分支（SSE）", response_class=EventSourceResponse)
@@ -52,33 +50,6 @@ async def logistics(
 ) -> AsyncIterator[ServerSentEvent]:
     async for event in stream_events(chat_service, req, requested_intent="logistics"):
         yield event
-
-
-@router.post("/service/confirm", response_model=ServiceConfirmResponse, summary="确认并提交业务办理")
-async def confirm_service(
-    req: ServiceConfirmRequest,
-    runtime: AgentRuntime = Depends(get_runtime),
-) -> ServiceConfirmResponse:
-    if runtime.orders.get(req.order_no) is None:
-        raise HTTPException(status_code=404, detail=f"订单不存在: {req.order_no}")
-
-    record, duplicated = runtime.tickets.create(
-        TicketCreate(
-            title=f"{req.service_type}办理 · {req.order_no}"[:60],
-            description=req.description,
-            category=req.category,
-            priority=req.priority,
-            contact=req.contact,
-        ),
-        source="service-panel",
-    )
-    message = "该业务已提交过，返回原工单。" if duplicated else "业务办理已提交。"
-    return ServiceConfirmResponse(
-        ticket_id=record.id,
-        status=record.status,
-        duplicated=duplicated,
-        message=message,
-    )
 
 
 @router.post("/fallback", summary="兜底分支（SSE）", response_class=EventSourceResponse)

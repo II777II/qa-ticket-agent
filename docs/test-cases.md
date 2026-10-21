@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（116 个，`backend/tests/`）——后端链路、订单/知识库数据、五路意图路由、物流 Agent/Tools、业务确认、custom 流、异常兜底、Langfuse、包契约、意图指标、检索、存储、工具、接口与整链；
+- **自动化用例**（117 个，`backend/tests/`）——后端链路、订单/知识库数据、五路意图路由、物流 Agent/Tools、业务动作、custom 流、异常兜底、Langfuse、包契约、意图指标、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 116 passed in ~12s
+python -m pytest              # 117 passed in ~12s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -102,6 +102,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-18 | 工具订单事件 | `query_order` 返回 orders 的 ToolMessage | 正常产生 `order` 事件，不因漏导入报错 |
 | A-19 | 意图指标 | 完成一轮知识问答后读取指标 | `by_intent` 含 knowledge，统计 calls/tokens/延迟/成功率 |
 | A-20 | 物流 Agent SSE | 询问带订单号的快递进度 | 出现 tool、order、token，intent=logistics |
+| A-21 | OpenAPI 语义分组 | 检查五路 SSE 与业务确认 tags | 分支统一为 intent-branches，确认接口为 service-actions |
 
 ## 六、整链（`test_chat_flow.py`）
 

@@ -18,6 +18,7 @@ from backend.api.routes import dialogue as dialogue_routes
 from backend.api.routes import knowledge as knowledge_routes
 from backend.api.routes import metrics as metrics_routes
 from backend.api.routes import orders as order_routes
+from backend.api.routes import service as service_routes
 from backend.api.routes import system as system_routes
 from backend.application.runtime import create_runtime
 from backend.infrastructure.config import settings
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
 
     app.include_router(system_routes.router)
     app.include_router(dialogue_routes.router)
+    app.include_router(service_routes.router)
     app.include_router(order_routes.router)
     app.include_router(knowledge_routes.router)
     app.include_router(metrics_routes.router)

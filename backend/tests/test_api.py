@@ -10,9 +10,10 @@ import pytest
 from langchain_core.messages import ToolMessage
 
 from backend.api.app import app as api_app
-from backend.api.routes import agent as agent_routes
+from backend.api.routes import branches as branch_routes
 from backend.api.routes import chat as chat_routes
 from backend.api.routes import dialogue as dialogue_routes
+from backend.api.routes import service as service_routes
 from backend.application.chat.service import _tool_events
 from backend.application.runtime import AgentRuntime
 
@@ -110,18 +111,32 @@ def test_openapi_mounts_chat_and_four_branch_routes() -> None:
     assert "/api/tickets" not in paths
 
 
-def test_dialogue_router_owns_chat_and_four_branch_routes() -> None:
-    """路由装配层级必须是 app → dialogue → chat / branch。"""
+def test_dialogue_router_owns_chat_and_intent_branches_only() -> None:
+    """服务动作不应混入 dialogue 聚合层。"""
     included = [
         getattr(route, "original_router", None)
         for route in dialogue_routes.router.routes
     ]
     assert any(router is chat_routes.router for router in included)
-    assert any(router is agent_routes.router for router in included)
+    assert any(router is branch_routes.router for router in included)
+    assert not any(router is service_routes.router for router in included)
     assert not any(
-        getattr(route, "original_router", None) is agent_routes.router
+        getattr(route, "original_router", None) is branch_routes.router
         for route in chat_routes.router.routes
     )
+
+
+def test_openapi_separates_intent_branches_and_service_actions() -> None:
+    paths = api_app.openapi()["paths"]
+    for path in (
+        "/branch/knowledge",
+        "/branch/query",
+        "/branch/service",
+        "/branch/logistics",
+        "/branch/fallback",
+    ):
+        assert paths[path]["post"]["tags"] == ["intent-branches"]
+    assert paths["/branch/service/confirm"]["post"]["tags"] == ["service-actions"]
 
 
 def test_kb_search_returns_hits(isolated_runtime: AgentRuntime) -> None:

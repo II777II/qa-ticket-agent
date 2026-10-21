@@ -110,7 +110,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | 五层说法 | 目录 | 职责 | 换实现的代价 |
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
-| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（dialogue / system / chat / agent）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
+| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（dialogue / chat / branches / service）、`schemas.py` | 不改 |
 | 接口层（数据接口） | `backend/api/routes/knowledge.py`、`orders.py`、`metrics.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
 | 应用层 | `backend/application/` | `runtime.py` 装配；`agent/` 编排；`chat/service.py` 对话用例；`contracts/chat_events.py` 共享事件；`tickets` / `orders` / `knowledge` 业务用例 | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 枚举与状态流转/去重规则、`errors.py` 领域异常 | 不改 |
@@ -123,21 +123,22 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 
 ```text
 main app
-└── dialogue aggregator
-    ├── chat router
-    │   └── POST /chat
-    └── branch router
-        ├── POST /branch/knowledge
-        ├── POST /branch/query
-        ├── POST /branch/service
-        ├── POST /branch/logistics
-        ├── POST /branch/service/confirm
-        └── POST /branch/fallback
+├── dialogue aggregator
+│   ├── chat router
+│   │   └── POST /chat
+│   └── intent-branches router
+│       ├── POST /branch/knowledge
+│       ├── POST /branch/query
+│       ├── POST /branch/service
+│       ├── POST /branch/logistics
+│       └── POST /branch/fallback
+└── service-actions router
+    └── POST /branch/service/confirm
 ```
 
-`app.py` 只挂载 dialogue 聚合 router；chat 与 branch 在聚合层平级挂载，避免让
-`/chat` 反向依赖 `/branch`。FastAPI 对外仍将六条对话路径扁平化为独立接口，因此 URL
-和行为不变。
+`app.py` 挂载 dialogue 聚合 router 和独立的 service-actions router。`/branch/*`
+SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确认后的业务写操作，
+标记为 `service-actions`，不再混入 Agent 或意图分支分组。
 
 前端页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
 `?panel=orders`（本轮订单）、`?panel=service`（业务办理）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→

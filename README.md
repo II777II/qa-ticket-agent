@@ -161,7 +161,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 116 个用例，约 12 秒
+python -m pytest            # 117 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -270,16 +270,17 @@ docker/                compose 升级落点（POC 不启用）
 
 ```text
 app
-└── dialogue aggregator
-    ├── chat router
-    │   └── POST /chat
-    └── branch router
-        ├── POST /branch/knowledge
-        ├── POST /branch/query
-        ├── POST /branch/service
-        ├── POST /branch/logistics
-        ├── POST /branch/service/confirm
-        └── POST /branch/fallback
+├── dialogue aggregator
+│   ├── chat router
+│   │   └── POST /chat
+│   └── intent-branches router
+│       ├── POST /branch/knowledge
+│       ├── POST /branch/query
+│       ├── POST /branch/service
+│       ├── POST /branch/logistics
+│       └── POST /branch/fallback
+└── service-actions router
+    └── POST /branch/service/confirm
 ```
 
 ## 排期
