@@ -137,7 +137,6 @@ class OrderRecord(BaseModel):
     paid_amount: float = 0
     refund_amount: float = 0
     created_at: str
-    updated_at: str = ""
     user: dict | None = None
     items: list[dict] = Field(default_factory=list)
 

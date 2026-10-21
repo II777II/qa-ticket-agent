@@ -49,16 +49,9 @@ def _env(name: str, default: str = "") -> str:
     return (os.getenv(name) or default).strip()
 
 
-def _int(name: str, default: int) -> int:
+def _number(name: str, default: int | float, cast):
     try:
-        return int(_env(name, str(default)))
-    except ValueError:
-        return default
-
-
-def _float(name: str, default: float) -> float:
-    try:
-        return float(_env(name, str(default)))
+        return cast(_env(name, str(default)))
     except ValueError:
         return default
 
@@ -66,23 +59,21 @@ def _float(name: str, default: float) -> float:
 @dataclass(frozen=True)
 class Settings:
     host: str = _env("HOST", "127.0.0.1")
-    port: int = _int("PORT", 5179)
+    port: int = _number("PORT", 5179, int)
     cors_origins: tuple[str, ...] = field(
-        default_factory=lambda: tuple(x.strip() for x in _env(
-            "CORS_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173"
-        ).split(",") if x.strip())
+        default_factory=lambda: tuple(x.strip() for x in _env("CORS_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173").split(",") if x.strip())
     )
     llm_provider: str = _env("LLM_PROVIDER", "mock").lower()
     llm_model: str = _env("LLM_MODEL")
     llm_api_key: str = _env("LLM_API_KEY")
     llm_base_url: str = _env("LLM_BASE_URL")
-    llm_temperature: float = _float("LLM_TEMPERATURE", 0.2)
-    llm_timeout: float = _float("LLM_TIMEOUT", 120.0)
+    llm_temperature: float = _number("LLM_TEMPERATURE", 0.2, float)
+    llm_timeout: float = _number("LLM_TIMEOUT", 120.0, float)
     checkpointer: str = _env("CHECKPOINTER", "memory").lower()
     retriever: str = _env("RETRIEVER", "memory").lower()
     ticket_store: str = _env("TICKET_STORE", "json").lower()
     order_store: str = _env("ORDER_STORE", "json").lower()
-    rag_top_k: int = _int("RAG_TOP_K", 3)
+    rag_top_k: int = _number("RAG_TOP_K", 3, int)
     data_dir: Path = field(default_factory=lambda: Path(_env("DATA_DIR", str(BACKEND_DIR / "data"))))
     orders_file: Path = field(default_factory=lambda: Path(_env("ORDERS_FILE", str(DEMO_DIR / "orders.json"))))
     kb_root: Path = field(default_factory=lambda: Path(_env("KB_ROOT", str(DEMO_DIR / "kb"))))
@@ -101,10 +92,6 @@ class Settings:
     @property
     def mock_mode(self) -> bool:
         return self.llm_provider == "mock"
-
-    @property
-    def ticket_store_file(self) -> Path:
-        return self.data_dir / "tickets.json"
 
     @property
     def langfuse_configured(self) -> bool:
@@ -237,20 +224,20 @@ class JsonKnowledgeCatalog:
         return len(self._articles)
 
 
+def _json_store(value: str, name: str, build):
+    if value == "json":
+        return build()
+    if value == "postgres":
+        raise NotImplementedError(f"{name}=postgres 尚未接入")
+    raise ValueError(f"未知的 {name}: {value!r}")
+
+
 def create_ticket_store() -> JsonTicketStore:
-    if settings.ticket_store == "json":
-        return JsonTicketStore(settings.ticket_store_file)
-    if settings.ticket_store == "postgres":
-        raise NotImplementedError("TICKET_STORE=postgres 尚未接入")
-    raise ValueError(f"未知的 TICKET_STORE: {settings.ticket_store!r}")
+    return _json_store(settings.ticket_store, "TICKET_STORE", lambda: JsonTicketStore(settings.data_dir / "tickets.json"))
 
 
 def create_order_store() -> JsonOrderStore:
-    if settings.order_store == "json":
-        return JsonOrderStore(settings.orders_file)
-    if settings.order_store == "postgres":
-        raise NotImplementedError("ORDER_STORE=postgres 尚未接入")
-    raise ValueError(f"未知的 ORDER_STORE: {settings.order_store!r}")
+    return _json_store(settings.order_store, "ORDER_STORE", lambda: JsonOrderStore(settings.orders_file))
 
 
 def create_knowledge_catalog() -> JsonKnowledgeCatalog:
@@ -350,7 +337,7 @@ def format_context(documents: Sequence[Document]) -> str:
     return "\n".join(lines)
 
 
-def _text(content: Any) -> str:
+def message_text(content: Any) -> str:
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -364,14 +351,11 @@ class FakeChatModel(BaseChatModel):
         return "fake-chat-model"
 
     def _compose(self, messages: list[BaseMessage]) -> str:
-        question = next((_text(x.content) for x in reversed(messages) if isinstance(x, HumanMessage)), "")
-        prompt = next((_text(x.content) for x in messages if isinstance(x, SystemMessage) and CONTEXT_HEADER in _text(x.content)), "")
+        question = next((message_text(x.content) for x in reversed(messages) if isinstance(x, HumanMessage)), "")
+        prompt = next((message_text(x.content) for x in messages if isinstance(x, SystemMessage) and CONTEXT_HEADER in message_text(x.content)), "")
         block = prompt.split(CONTEXT_HEADER, 1)[-1].split(CONTEXT_FOOTER, 1)[0]
         matches = list(re.finditer(r"(?m)^\[(\d+)\]\s*(.+)$", block))
-        docs = []
-        for i, match in enumerate(matches):
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(block)
-            docs.append((f"[{match.group(1)}] {match.group(2)}", block[match.end():end].strip()))
+        docs = [(f"[{m.group(1)}] {m.group(2)}", block[m.end():(matches[i + 1].start() if i + 1 < len(matches) else len(block))].strip()) for i, m in enumerate(matches)]
         return (
             f"【演示模式】检索到 {len(docs)} 段资料：\n\n" + "\n\n".join(f"{h}\n{b[:160]}" for h, b in docs)
             if docs else f"【演示模式】问题：{question or '（空）'}"

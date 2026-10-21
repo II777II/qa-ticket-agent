@@ -25,7 +25,6 @@ router = APIRouter()
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1)
     thread_id: str = "default"
-    user_id: str | None = None
 
 
 class ServiceConfirmRequest(BaseModel):

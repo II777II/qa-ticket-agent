@@ -18,9 +18,9 @@ from backend.domain.core import (
     guess_category, rule_classify,
 )
 from backend.infrastructure.core import (
-    LangfuseTracing, MetricsCollector, create_checkpointer,
-    create_knowledge_catalog, create_langfuse_tracing, create_llm, create_order_store,
-    create_retriever, create_ticket_store, estimate_tokens, format_context, settings,
+    LangfuseTracing, MetricsCollector, create_checkpointer, create_knowledge_catalog,
+    create_langfuse_tracing, create_llm, create_order_store, create_retriever,
+    create_ticket_store, estimate_tokens, format_context, message_text, settings,
 )
 
 EVENT_START, EVENT_INTENT, EVENT_TOKEN = "start", "intent", "token"
@@ -29,10 +29,7 @@ EVENT_DONE, EVENT_ERROR = "done", "error"
 INTENTS = ("knowledge", "query", "service", "fallback")
 TRANSFER_HINTS = ("转人工", "人工客服", "找人工", "客服电话", "投诉", "差评")
 CLASSIFIER_PROMPT = "把用户消息分类为 knowledge、query、service、fallback 之一。只输出 IntentResult JSON，不要 Markdown。"
-SYSTEM_PROMPT = (
-    "你是电商智能客服。基于【参考资料】回答并标引用编号；不要编造订单或规则。"
-    "信息不足先追问。售后不会直接建单，只有用户在右侧确认后才提交。"
-)
+SYSTEM_PROMPT = "你是电商智能客服。基于【参考资料】回答并标引用编号；不要编造订单或规则。信息不足先追问。售后不会直接建单，只有用户在右侧确认后才提交。"
 logger = logging.getLogger("qa_ticket")
 
 
@@ -48,19 +45,8 @@ class AgentState(MessagesState):
     draft: NotRequired[dict[str, Any]]
 
 
-def _text(content: Any) -> str:
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "".join(
-            x if isinstance(x, str) else str(x.get("text", ""))
-            for x in content if isinstance(x, (str, dict))
-        )
-    return str(content)
-
-
 def _last_human(messages: Sequence[BaseMessage]) -> str:
-    return next((_text(x.content) for x in reversed(messages) if isinstance(x, HumanMessage)), "")
+    return next((message_text(x.content) for x in reversed(messages) if isinstance(x, HumanMessage)), "")
 
 
 def _emit(writer: StreamWriter, event: str, data: dict[str, Any]) -> None:
@@ -170,20 +156,13 @@ def _service(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
     }
     _emit(writer, EVENT_SERVICE_DRAFT, draft)
     labels = {"service_type": "业务类型", "order_no": "订单号", "contact": "联系人", "description": "问题描述"}
-    suffix = (
-        f"还缺少：{'、'.join(labels[x] for x in missing)}，请补齐后确认。" if missing
-        else "槽位已齐全，请核对并确认提交。"
-    )
+    suffix = f"还缺少：{'、'.join(labels[x] for x in missing)}，请补齐后确认。" if missing else "槽位已齐全，请核对并确认提交。"
     text = f"已整理业务办理草稿：\n- 类型：{service_type or '待补充'}\n- 订单：{order_no or '待补充'}\n{suffix}"
     return {"messages": [AIMessage(content=text)], "draft": draft}
 
 
 def _fallback(state: AgentState) -> dict[str, Any]:
-    text = (
-        "已收到转人工/投诉请求。当前演示版未接入人工坐席，请先查看帮助中心规则。"
-        if any(x in state["question"] for x in TRANSFER_HINTS)
-        else "你好，我可以查询订单、解释帮助中心规则，或整理售后业务草稿。"
-    )
+    text = "已收到转人工/投诉请求。当前演示版未接入人工坐席，请先查看帮助中心规则。" if any(x in state["question"] for x in TRANSFER_HINTS) else "你好，我可以查询订单、解释帮助中心规则，或整理售后业务草稿。"
     return {"messages": [AIMessage(content=text)]}
 
 
@@ -194,11 +173,11 @@ def route_by_intent(state: AgentState) -> str:
 def build_graph(*, llm: BaseChatModel, retriever: Any | None = None, checkpointer: Any | None = None,
                 order_service: Any | None = None, system_prompt: str = SYSTEM_PROMPT):
     graph = StateGraph(AgentState)
-    for name, node in {
-        "preprocess": _preprocess, "classify": _classify(llm),
-        "knowledge": _knowledge(llm, retriever, system_prompt), "query": _query(order_service),
-        "service": _service, "fallback": _fallback,
-    }.items():
+    nodes = {
+        "preprocess": _preprocess, "classify": _classify(llm), "knowledge": _knowledge(llm, retriever, system_prompt),
+        "query": _query(order_service), "service": _service, "fallback": _fallback,
+    }
+    for name, node in nodes.items():
         graph.add_node(name, node)
     graph.add_edge(START, "preprocess")
     graph.add_edge("preprocess", "classify")
@@ -233,7 +212,7 @@ class ChatService:
                         usage = getattr(chunk, "usage_metadata", None)
                         if isinstance(usage, dict):
                             tokens = max(tokens, int(usage.get("total_tokens") or 0))
-                        if text := _text(chunk):
+                        if text := message_text(chunk):
                             first_at = first_at or time.perf_counter()
                             answer.append(text)
                             yield EVENT_TOKEN, {"text": text}
@@ -247,7 +226,7 @@ class ChatService:
                     for output in payload.values():
                         for item in output.get("messages") or [] if isinstance(output, dict) else []:
                             if isinstance(item, AIMessage) and not isinstance(item, AIMessageChunk):
-                                final_text = _text(item) or final_text
+                                final_text = message_text(item) or final_text
             if not answer and final_text:
                 first_at, answer = time.perf_counter(), [final_text]
                 yield EVENT_TOKEN, {"text": final_text}
@@ -291,8 +270,7 @@ class AgentRuntime:
         }
 
     def shutdown(self) -> None:
-        if self.tracing:
-            self.tracing.shutdown()
+        self.tracing and self.tracing.shutdown()
 
 
 def create_runtime() -> AgentRuntime:
