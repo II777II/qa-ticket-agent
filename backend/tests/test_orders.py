@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from backend.infrastructure.config import settings
-from backend.infrastructure.persistence import JsonOrderStore
+from backend.infrastructure.core import JsonOrderStore, settings
 
 
 def _store() -> JsonOrderStore:

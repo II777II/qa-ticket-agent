@@ -6,8 +6,8 @@ import json
 import re
 from pathlib import Path
 
-from backend.domain import TicketCreate
-from backend.infrastructure.persistence import JsonTicketStore
+from backend.domain.core import TicketCreate
+from backend.infrastructure.core import JsonTicketStore
 
 
 def test_create_assigns_daily_sequence_id(store: JsonTicketStore, sample_ticket: TicketCreate) -> None:

@@ -9,9 +9,8 @@ import httpx
 import pytest
 
 from backend.api.app import app as api_app
-from backend.api.routes import dialogue as dialogue_routes
-from backend.api.routes import service as service_routes
-from backend.application.runtime import AgentRuntime
+from backend.api.core import router
+from backend.application.core import AgentRuntime
 
 
 def _client() -> httpx.AsyncClient:
@@ -106,16 +105,15 @@ def test_openapi_mounts_chat_and_five_branch_routes() -> None:
 
 
 def test_dialogue_router_owns_chat_and_intent_branches_only() -> None:
-    """服务动作不应混入 dialogue 聚合层。"""
-    paths = {route.path for route in dialogue_routes.router.routes}
-    assert paths == {
+    """单一聚合路由保留对话入口和四路意图入口。"""
+    paths = {route.path for route in router.routes}
+    assert {
         "/chat",
         "/branch/knowledge",
         "/branch/query",
         "/branch/service",
         "/branch/fallback",
-    }
-    assert service_routes.router is not dialogue_routes.router
+    }.issubset(paths)
 
 
 def test_openapi_separates_intent_branches_and_service_actions() -> None:

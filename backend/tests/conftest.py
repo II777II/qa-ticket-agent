@@ -27,10 +27,12 @@ os.environ["TICKET_STORE"] = "json"
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="qa-ticket-test-")
 os.environ["LANGFUSE_ENABLED"] = "false"
 
-from backend.application.runtime import AgentRuntime, create_runtime  # noqa: E402
-from backend.domain import TicketCreate  # noqa: E402
-from backend.infrastructure.persistence import JsonTicketStore  # noqa: E402
-from backend.infrastructure.retrieval.in_memory import InMemoryRetriever  # noqa: E402
+from backend.application.core import AgentRuntime, build_graph, create_runtime  # noqa: E402
+from backend.domain.core import TicketCreate  # noqa: E402
+from backend.infrastructure.core import (  # noqa: E402
+    FakeChatModel, InMemoryRetriever, JsonTicketStore, MetricsCollector, create_knowledge_catalog,
+    create_order_store, settings,
+)
 
 
 @pytest.fixture()
@@ -41,8 +43,6 @@ def store(tmp_path: Path) -> JsonTicketStore:
 
 @pytest.fixture()
 def retriever() -> InMemoryRetriever:
-    from backend.infrastructure.config import settings
-
     return InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
 
 
@@ -55,34 +55,25 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     """测试用运行时：工单写到指定文件，其余组件与生产完全一致。"""
     from langgraph.checkpoint.memory import InMemorySaver
 
-    from backend.application.agent import build_graph
-    from backend.application.knowledge import KnowledgeService
-    from backend.application.orders import OrderService
-    from backend.application.tickets import TicketService
-    from backend.infrastructure.config import settings
-    from backend.infrastructure.llm.mock import FakeChatModel
-    from backend.infrastructure.observability import MetricsCollector
-    from backend.infrastructure.persistence import create_knowledge_catalog, create_order_store
-
     llm = FakeChatModel()
     store = JsonTicketStore(store_path)
-    tickets = TicketService(store)
-    orders_service = OrderService(create_order_store())
+    orders = create_order_store()
+    knowledge = create_knowledge_catalog()
     retriever = InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
     checkpointer = InMemorySaver()
     graph = build_graph(
         llm=llm,
         retriever=retriever,
         checkpointer=checkpointer,
-        order_service=orders_service,
+        order_service=orders,
     )
     return AgentRuntime(
         graph=graph,
         llm=llm,
-        tickets=tickets,
+        tickets=store,
         metrics=MetricsCollector(),
-        orders=orders_service,
-        knowledge=KnowledgeService(create_knowledge_catalog()),
+        orders=orders,
+        knowledge=knowledge,
         retriever=retriever,
         checkpointer=checkpointer,
         store=store,

@@ -43,13 +43,13 @@ docker compose -f docker/docker-compose.yml up -d --build
 
 | 目标 | 装什么 | 改 .env | 代码位置 |
 | --- | --- | --- | --- |
-| 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `infrastructure/memory/__init__.py` 已留分支 |
-| 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 新增 `infrastructure/persistence/postgres_store.py`，满足 `application/tickets/service.py` 的 `TicketStore` 协议 |
+| 长期记忆 / 多实例共享 | `langgraph-checkpoint-postgres` | `CHECKPOINTER=postgres`、`DATABASE_URL=...` | `infrastructure/core.py` 的 `create_checkpointer()` 已留分支 |
+| 工单入库 | `sqlalchemy`、`psycopg[binary]` | `TICKET_STORE=postgres` | 在 `infrastructure/core.py` 增加 Postgres 仓储类 |
 | 订单入库 | `sqlalchemy`、`psycopg[binary]` | `ORDER_STORE=postgres` | 按 `docs/sql/postgres_schema.sql` 建表，新增 `postgres_order_store.py` 满足 `OrderStore` 协议 |
-| 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | 新增 `infrastructure/retrieval/pgvector.py` |
-| 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `infrastructure/llm/__init__.py` 加分支 |
+| 向量检索 | `langchain-postgres` + 嵌入模型 | `RETRIEVER=pgvector`、`VECTOR_DB_URL`/`EMBED_MODEL` | `infrastructure/core.py` 增加 pgvector 实现 |
+| 多模型网关 | `langchain-litellm` | `LLM_PROVIDER=litellm` | `infrastructure/core.py` 的 `create_llm()` 加分支 |
 | 会话缓存 / 限流 | `redis` | `REDIS_URL=...` | 新增 |
-| LLM 可观测性 | `langfuse>=5` | `LANGFUSE_ENABLED=true` 等 | `infrastructure/observability/langfuse.py` |
+| LLM 可观测性 | `langfuse>=5` | `LANGFUSE_ENABLED=true` 等 | `infrastructure/core.py` 的 Langfuse 适配 |
 
 每个分支现在都会抛一个说明性错误（告诉你缺哪个包、要开哪个服务），不会静默降级。
 

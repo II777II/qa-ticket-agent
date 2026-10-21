@@ -26,7 +26,7 @@ python -m backend.scripts.draw_graph --png --html
 
 ```python
 from IPython.display import Image, display
-from backend.application.runtime import create_runtime
+from backend.application.core import create_runtime
 
 graph = create_runtime().graph
 display(Image(graph.get_graph().draw_mermaid_png()))   # 联网渲染
@@ -44,7 +44,7 @@ flowchart TD
     S([__start__]) --> P["preprocess<br/>trim / 截断"]
     P --> C["classify<br/>LLM 结构化输出 + 规则兜底"]
     C -- knowledge --> K["knowledge<br/>RAG 检索 + 生成回答"]
-    C -- query --> Q["query<br/>OrderService 查询"]
+    C -- query --> Q["query<br/>订单仓储查询"]
     C -- service --> V["service<br/>槽位抽取 + 工单草稿"]
     C -- fallback --> F["fallback<br/>投诉/转人工/闲聊"]
     K --> E([__end__])
@@ -59,7 +59,7 @@ flowchart TD
 | `classify` | `classify_intent()`：优先 LLM `with_structured_output`，演示模式/失败时用 `rule_classify()`；产出 intent/confidence/reason/slots |
 | `route_by_intent` | 条件边：只允许 knowledge / query / service / fallback，未知意图走 fallback |
 | `knowledge` | 调用检索器并拼【参考资料】，再 `llm.invoke()` 生成带引用回答 |
-| `query` | 解析订单号/关键词，调用 `OrderService.get/search`，返回订单列表（不检索） |
+| `query` | 解析订单号/关键词，调用 `JsonOrderStore.get/search`，返回订单列表（不检索） |
 | `service` | 抽取业务类型/订单号/联系人等槽位，生成可编辑草稿；用户确认后才提交 |
 | `fallback` | 投诉/转人工/闲聊兜底话术；演示版无人工坐席 |
 
@@ -67,11 +67,11 @@ knowledge、query、service、fallback 四路都是明确、可测试的执行�
 
 ## Agent 与工具边界
 
-当前 POC 不向模型暴露工具。订单查询由确定性 query 节点调用 `OrderService`；售后业务只生成
+当前 POC 不向模型暴露工具。订单查询由确定性 query 节点调用订单仓储；售后业务只生成
 草稿，用户确认后才通过独立的 `service-actions` 路由创建工单。
 
 订单查询是**只读工具**：`order_lookup` 意图会跳过 RAG（避免把「订单」当成知识问题），
-query 节点直接调用 `OrderService`；查不到时让用户补订单号，不创建售后工单。
+query 节点直接调用 `JsonOrderStore`；查不到时让用户补订单号，不创建售后工单。
 
 ## 分层与职责
 
@@ -80,32 +80,28 @@ query 节点直接调用 `OrderService`；查不到时让用户补订单号，�
 | 五层说法 | 目录 | 职责 | 换实现的代价 |
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
-| 接口层 | `backend/api/` | `app.py` 组装、`routes/`（dialogue / service / resources / system）、`schemas.py` | 不改 |
-| 接口层（数据接口） | `backend/api/routes/resources.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
-| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/graph.py` 编排；`chat/service.py` 对话用例；`contracts/__init__.py` 共享事件；`tickets` / `orders` / `knowledge` 业务用例 | 加用例不改图 |
-| 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 分类/优先级/去重/单号规则 | 不改 |
-| 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/store.py`、`observability/`、`version.py` | 只加一个分支 |
+| 接口层 | `backend/api/` | `core.py` 集中请求模型、全部路由、SSE、FastAPI 与静态托管；`app.py` 是 ASGI 入口 | 不改 |
+| 应用层 | `backend/application/core.py` | `build_graph()` 四路编排、`ChatService`、`AgentRuntime` | 加分支时改当前文件 |
+| 领域层 | `backend/domain/core.py` | 实体、意图/槽位、订单摘要、分类/优先级/去重/单号规则 | 不改 |
+| 基础设施层 | `backend/infrastructure/core.py` | 配置、日志、版本、JSON 仓储、RAG、LLM、指标与 Langfuse | 当前文件内加工厂分支 |
 
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
 领域层不 import FastAPI / LangChain；接口层不写业务规则。
 
-对话接口在装配上采用中立聚合 Router：
+全部接口由一个 Router 注册：
 
 ```text
 main app
-├── dialogue aggregator
-│   ├── chat router
-│   │   └── POST /chat
-│   └── intent-branches router
-│       ├── POST /branch/knowledge
-│       ├── POST /branch/query
-│       ├── POST /branch/service
-│       └── POST /branch/fallback
-└── service-actions router
+└── api/core.py router
+    ├── POST /chat
+    ├── POST /branch/knowledge
+    ├── POST /branch/query
+    ├── POST /branch/service
+    ├── POST /branch/fallback
     └── POST /branch/service/confirm
 ```
 
-`app.py` 挂载 dialogue 聚合 router 和独立的 service-actions router。`/branch/*`
+`app.py` 只暴露 `api/core.py` 中的应用实例。`/branch/*`
 SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确认后的业务写操作，
 标记为 `service-actions`，不再混入 Agent 或意图分支分组。
 
@@ -167,21 +163,20 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 便于对比两种写法。
 
 `EVENT_*` 属于跨 Agent、Chat、API 与 CLI 的共享契约，统一放在
-`application/contracts/__init__.py`。`application/chat` 包的公开门面只导出
-`ChatService`，不再承担契约分发职责，避免共享事件被误认为 chat 私有实现。
+`application/core.py`。Chat、Agent 与 API 直接引用同一组常量，不再维护包门面。
 
 ## 四个扩展点与生产替换
 
 | 扩展点 | POC 实现 | 抽象接口 | 生产替换 | 怎么换 |
 | --- | --- | --- | --- | --- |
-| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/llm/__init__.py` 加分支 |
+| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/core.py` 的 `create_llm()` 加分支 |
 | 记忆 | `InMemorySaver`（进程内存） | `BaseCheckpointSaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 检索 | 关键词命中 + 标题加权 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
 | LLM 可观测性 | 可选 Langfuse CallbackHandler | LangChain callbacks | Langfuse Cloud / 自托管 | `.env: LANGFUSE_ENABLED=true` |
 
 进程内指标只保留 KPI 和最终意图聚合 `calls / tokens / avg_latency_ms / success_rate`，
-用于后续按知识问答、订单、业务办理、物流等分支分别优化。
+用于后续按知识问答、订单、业务办理和兜底分支分别优化。
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
 | 编排 | preprocess + classify + 四路分支 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from backend.infrastructure.observability.metrics import MetricsCollector, estimate_tokens
+from backend.infrastructure.core import MetricsCollector, estimate_tokens
 
 
 def test_estimate_tokens_counts_cjk_and_latin() -> None:

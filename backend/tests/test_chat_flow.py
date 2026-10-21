@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from backend.application.chat import ChatService
-from backend.application.runtime import AgentRuntime
+from backend.application.core import AgentRuntime, ChatService
 
 
 async def _collect(runtime: AgentRuntime, message: str, thread: str) -> dict:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.domain import TicketCreate, TicketRecord, duplicate_of, next_ticket_id
+from backend.domain.core import TicketCreate, TicketRecord, duplicate_of, next_ticket_id
 
 TODAY = date(2026, 10, 16)
 

@@ -143,7 +143,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 | 意图 | HTTP 分支 | 判定（规则兜底） | 分支行为 | 前端事件 |
 | --- | --- | --- | --- | --- |
 | `knowledge` 知识咨询 | `POST /branch/knowledge` | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
-| `query` 订单查询 | `POST /branch/query` | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `OrderService`，不检索 | `order` + `token` |
+| `query` 订单查询 | `POST /branch/query` | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `JsonOrderStore`，不检索 | `order` + `token` |
 | `service` 业务办理 | `POST /branch/service` | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 识别槽位、生成可编辑草稿并提示缺失项；确认后提交 | `service_draft` + `token` |
 | `fallback` 兜底 | `POST /branch/fallback` | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
 
@@ -157,11 +157,11 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 84 个用例，约 8 秒
+python -m pytest            # 83 个用例，约 3 秒
 python -m pytest -v         # 看每个用例名
 ```
 
-用例覆盖检索、工单存储、工具参数校验、LangGraph 编排、HTTP/SSE 接口与整链演示流程，
+用例覆盖检索、工单存储、业务规则、LangGraph 编排、HTTP/SSE 接口与整链演示流程，
 固定使用演示模式与临时数据目录，**不联网、不依赖外部服务、不污染项目数据**。
 用例清单、边界用例与前端手工用例见 [docs/test-cases.md](docs/test-cases.md)。
 
@@ -194,7 +194,7 @@ python -m backend.scripts.generate_ecommerce_demo
 数据说明见 [docs/ecommerce-demo-data.md](docs/ecommerce-demo-data.md)；Postgres 目标结构见
 [docs/sql/postgres_schema.sql](docs/sql/postgres_schema.sql)（订单 8 表 + 知识库 7 表）。
 
-检索实现（[backend/infrastructure/retrieval/in_memory.py](backend/infrastructure/retrieval/in_memory.py)）刻意做成零依赖、可解释：
+检索实现（[backend/infrastructure/core.py](backend/infrastructure/core.py)）刻意做成零依赖、可解释：
 
 1. HTML 按 `<h2>` 切块并去掉标签，忽略 `index.html` 和其他文件格式；
 2. 查询与片段都按「英文单词 + 中文二元组」切词；
@@ -212,30 +212,11 @@ python -m backend.scripts.generate_ecommerce_demo
 
 ```
 backend/
-  domain/              领域层：工单实体（models.py）、业务规则（rules.py）、领域异常（errors.py）
-  application/         应用层
-    runtime.py         装配：调工厂拼出运行时（不含业务动作）
-    agent/             graph.py（意图、提示词与四路编排）
-    chat/service.py    用例：一轮对话（驱动图 + 翻译 token/order/service_draft/citation 事件）
-    contracts/         跨 Agent/Chat/API 的对话事件契约（EVENT_*）
-    tickets/service.py 用例：确认后创建工单与计数
-    orders/service.py  用例：电商订单查询
-    knowledge/service.py 用例：知识库目录浏览/搜索
-  infrastructure/      基础设施层
-    config.py          集中配置，决定用哪个实现
-    logging.py         日志初始化（手写 Handler，避免 basicConfig 静默失效）
-    llm/               模型工厂 + 演示模式假模型
-    memory/            短期记忆（checkpointer）工厂
-    retrieval/         进程内检索（切块 + 关键词命中打分 + 拼参考资料）
-    persistence/       store.py：工单/订单 JSON 存储、知识库目录与工厂
-    llm/ memory/ retrieval/  各包的 __init__.py 集成实现与工厂
-    observability/     进程内指标 + 可选 Langfuse tracing
-  api/                 接口层
-    app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
-    deps.py            依赖取用点（从 app.state 取运行时与用例）
-    streaming.py       SSE 响应封装（/chat 与 /branch/* 共用）
-    routes/            dialogue.py / service.py / resources.py / system.py
-    schemas.py         请求响应模型与 SSE 编码
+  domain/core.py       领域模型、意图规则、槽位、订单摘要与工单规则
+  application/core.py  LangGraph 四路编排、ChatService、运行时装配
+  infrastructure/core.py  配置、JSON 仓储、RAG、LLM、指标与 Langfuse
+  api/core.py          请求模型、全部 HTTP/SSE 路由、FastAPI 与静态托管
+  api/app.py           ASGI 入口（backend.api.app:app）
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
@@ -250,30 +231,28 @@ frontend/
                        / KpiCard / VersionBadge / SiteSidebar
   src/hooks/           useChat（流式与会话恢复）、useConversations（localStorage 历史）
   src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单/知识库/指标查询
-  src/types.ts         与后端 schemas.py 对应的类型
+  src/types.ts         与后端 api/core.py 请求响应模型对应的类型
 docs/
   architecture.md      架构图、执行路径、SSE 事件表、扩展点与生产替换
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
   interview-notes.md   30 秒陈述与高频追问应对
   deployment.md        三种跑法、compose 升级步骤、日志与排查
-  test-cases.md        50 个自动化用例 + 11 个前端手工用例 + 需求覆盖矩阵
+  test-cases.md        83 个自动化用例 + 前端手工用例 + 需求覆盖矩阵
 docker/                compose 升级落点（POC 不启用）
 ```
 
-对话路由的装配层级：
+所有 HTTP/SSE 路由由一个聚合 Router 注册：
 
 ```text
 app
-├── dialogue aggregator
-│   ├── chat router
-│   │   └── POST /chat
-│   └── intent-branches router
-│       ├── POST /branch/knowledge
-│       ├── POST /branch/query
-│       ├── POST /branch/service
-│       └── POST /branch/fallback
-└── service-actions router
-    └── POST /branch/service/confirm
+└── api/core.py router
+    ├── POST /chat
+    ├── POST /branch/knowledge
+    ├── POST /branch/query
+    ├── POST /branch/service
+    ├── POST /branch/fallback
+    ├── POST /branch/service/confirm
+    └── 健康、订单、知识库、指标与首页接口
 ```
 
 ## 排期
@@ -293,8 +272,8 @@ app
 | `MemorySaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 进程内检索 | pgvector / Qdrant | `.env: RETRIEVER=pgvector` |
 | JSON 工单文件 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
-| 直连模型 | LiteLLM 网关 | `infrastructure/llm/__init__.py` 加一个分支 |
-| ~~`logging.basicConfig`~~ | 已落地：手写 `Handler` + 判断注册 | `infrastructure/logging.py` |
+| 直连模型 | LiteLLM 网关 | `infrastructure/core.py` 的 `create_llm()` 加分支 |
+| 日志 | 手写 `Handler` + 存在性判断 | `infrastructure/core.py` 的 `setup_logging()` |
 | 单进程 | Docker Compose | 打开 `docker/docker-compose.yml` 注释块 |
 
 关于日志这条，升级时要带两个保护：`if logger.handlers: return`——判断的是**要挂 handler 的那个 logger**，不是 root（`basicConfig` 恰好判 root，所以 root 一旦被 uvicorn / pytest 配过，它会静默失效）；命名 logger 自己挂了 handler 之后要设 `propagate = False`，否则 root 上的 handler 会把同一条日志再打一遍。配置要分开发/生产两套时，`dictConfig` + `disable_existing_loggers: False` 比手写更好维护。
