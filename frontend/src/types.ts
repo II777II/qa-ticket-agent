@@ -23,7 +23,7 @@ export interface ErrorEvent {
 }
 
 export interface IntentEvent {
-  intent: "knowledge" | "query" | "service" | "fallback";
+  intent: "read" | "write" | "human";
   confidence: number;
   reason: string;
   slots: Record<string, string>;
@@ -220,7 +220,7 @@ export interface OrderRecord {
   source_label: string;
 }
 
-/** query 分支产生的订单摘要（order 事件载荷） */
+/** order_query 工具产生的订单摘要（order 事件载荷） */
 export interface OrderSummary {
   order_no: string;
   status: string;

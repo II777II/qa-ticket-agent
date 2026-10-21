@@ -14,10 +14,10 @@
 | --- | --- | --- |
 | 前端 | React + TypeScript + Vite + Ant Design X | 已就绪（Bubble / Sender / Welcome） |
 | 后端 | Python 3.11 + FastAPI，SSE 流式 | 已就绪 |
-| 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 意图分类 + 四路分支） | 已就绪 |
+| 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 三路分类 + read 内确定性工具分流） | 已就绪 |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
-| 工具调用 | POC 不向模型暴露工具；订单走确定性 query 节点 | 已就绪 |
+| 工具调用 | POC 不向模型暴露工具；read 节点按规则确定性调用知识库/订单工具 | 已就绪 |
 | 简易 RAG | 进程内检索 + 50 篇电商 HTML + 引用 | 已就绪（HTML 按 h2 切块） |
 | 订单查询 | JSON 演示数据（50 单，按 Postgres 表形状） | 已就绪（`#/orders`） |
 | 知识库 | 50 篇 HTML 文章 + 分类/标签目录 | 已就绪（`#/kb`） |
@@ -46,7 +46,7 @@ python -m backend.scripts.cli_chat --once "帮我查询张三的订单"
 # 走一遍「知识库问答 → 订单查询 → 多轮追问」（演示模式下也能跑）
 python -m backend.scripts.cli_chat
 #   你 > 退款多久到账                          <- 知识库问答，带引用
-#   你 > 帮我查询张三的订单                    <- 走确定性 query，不建单
+#   你 > 帮我查询张三的订单                    <- read 分支调用 order_query，不建单
 #   你 > 那退款失败会怎么处理                  <- 多轮追问
 
 # 后端：起 HTTP 服务（/docs 里有交互式接口文档）
@@ -93,11 +93,10 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | POST | `/chat` | 统一流式对话入口（SSE），自动执行 LLM 意图识别并分流 |
-| POST | `/branch/knowledge` | 强制进入知识库问答分支（SSE） |
-| POST | `/branch/query` | 强制进入订单查询分支（SSE） |
-| POST | `/branch/service` | 强制进入售后业务草稿分支（SSE） |
+| POST | `/branch/read` | 强制进入只读分支；内部规则选择知识库或订单工具（SSE） |
+| POST | `/branch/write` | 强制进入售后业务草稿分支（SSE） |
 | POST | `/branch/service/confirm` | 用户确认后提交业务办理并创建售后工单 |
-| POST | `/branch/fallback` | 强制进入兜底分支（SSE） |
+| POST | `/branch/human` | 强制进入人工/兜底分支（SSE） |
 | GET | `/health` | 健康检查，返回当前 provider 与各扩展点实现 |
 | GET | `/api/agent-info` | 当前 Agent 能力（模型、工具、工单数、知识库文档/片段数、预留的 compose 落点） |
 | GET | `/api/kb/search?q=&top_k=` | 知识库检索命中（来源、小节、片段、相关度），供右侧知识面板 |
@@ -123,7 +122,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 | `#/` | 首页 | 只有对话框：居中输入框 + 快捷问题 + 底部版本号 |
 | `#/chat` | 对话记录 | 左侧会话历史（今天/昨天/更早）+ 对话区，引用与订单标签渲染在气泡底部 |
 | `#/chat?panel=knowledge` | 对话 + 知识库 | 右侧列出**这一轮**问答的 Top-K 检索命中（来源、小节、相关度、片段） |
-| `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** query 分支查到的订单（单号/状态/金额/商品/收货人） |
+| `#/chat?panel=orders` | 对话 + 订单 | 右侧显示**这一轮** read 分支 `order_query` 工具查到的订单（单号/状态/金额/商品/收货人） |
 | `#/chat?panel=service` | 对话 + 业务办理 | 右侧编辑槽位、查看缺失提醒，并在核对后确认提交 |
 | `#/orders` | 订单查询 | 按订单号/用户/商品关键词 + 状态过滤；右侧查看明细、金额、支付/退款与状态时间线 |
 | `#/kb` | 知识库检索 | 8 个分类浏览 50 篇 HTML；关键词检索 + RAG 命中片段，点击打开 HTML 原文 |
@@ -136,20 +135,20 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 点历史消息里的引用/订单/业务草稿标签，面板会切回那一轮的数据。业务办理必须先由用户核对并确认，
 前端不会在生成草稿时自动创建工单。
 
-## 对话路由（四路）
+## 对话路由（三类）
 
-一轮对话在 LangGraph 里固定走：`preprocess → classify → 四路分支`。
+一轮对话在 LangGraph 里固定走：`preprocess → classify → read / write / human`。
 
 | 意图 | HTTP 分支 | 判定（规则兜底） | 分支行为 | 前端事件 |
 | --- | --- | --- | --- | --- |
-| `knowledge` 知识咨询 | `POST /branch/knowledge` | 默认分支 | RAG 检索 + 生成回答 | `citation` + `token` |
-| `query` 订单查询 | `POST /branch/query` | 订单号 / 我的订单 / 查订单 / 订单进度 | 查 `JsonOrderStore`，不检索 | `order` + `token` |
-| `service` 业务办理 | `POST /branch/service` | 建单 / 退货 / 换货 / 维修 / 保修 / 质量问题 | 识别槽位、生成可编辑草稿并提示缺失项；确认后提交 | `service_draft` + `token` |
-| `fallback` 兜底 | `POST /branch/fallback` | 投诉 / 转人工 / 问候 / 闲聊 | 兜底话术；演示版未接人工坐席 | `token` |
+| `read` 只读查询 | `POST /branch/read` | 排除投诉和明确业务动作后的查询请求 | 订单号/查订单规则调用 `order_query`；其他调用 `knowledge_search` | `order` 或 `citation` + `token` |
+| `write` 业务办理 | `POST /branch/write` | 建单、申请退换修、办理售后等明确动作 | 识别槽位、生成可编辑草稿；确认后提交 | `service_draft` + `token` |
+| `human` 人工/兜底 | `POST /branch/human` | 投诉、转人工、问候、闲聊及未知意图 | 兜底话术；演示版未接人工坐席 | `token` |
 
 分类器优先用 LLM 结构化输出（`with_structured_output`），演示模式或分类失败时自动退回规则；
 每次识别结果通过 `intent` 事件返回，对话页顶栏显示当前路由。`/chat` 负责自动分类；
 `/branch/*` 则由 HTTP 路径直接锁定意图，便于联调、测试和后续按分支独立扩展。
+`read` 的知识库与订单选择不再询问模型，而是按订单号、订单查询关键词和知识排除词确定性分派。
 
 业务办理槽位包括业务类型、订单号、联系人和问题描述。缺失项会在右侧高亮；
 信息齐全后仍需勾选核对声明并点击“确认提交”，随后由 `/branch/service/confirm` 创建工单。
@@ -213,7 +212,7 @@ python -m backend.scripts.generate_ecommerce_demo
 ```
 backend/
   domain/core.py       领域模型、意图规则、槽位、订单摘要与工单规则
-  application/core.py  LangGraph 四路编排、ChatService、运行时装配
+  application/core.py  LangGraph 三路编排、read 工具分派、ChatService、运行时装配
   infrastructure/core.py  配置、JSON 仓储、RAG、LLM、指标与 Langfuse
   api/core.py          请求模型、全部 HTTP/SSE 路由、FastAPI 与静态托管
   api/app.py           ASGI 入口（backend.api.app:app）
@@ -247,10 +246,9 @@ docker/                compose 升级落点（POC 不启用）
 app
 └── api/core.py router
     ├── POST /chat
-    ├── POST /branch/knowledge
-    ├── POST /branch/query
-    ├── POST /branch/service
-    ├── POST /branch/fallback
+    ├── POST /branch/read
+    ├── POST /branch/write
+    ├── POST /branch/human
     ├── POST /branch/service/confirm
     └── 健康、订单、知识库、指标与首页接口
 ```

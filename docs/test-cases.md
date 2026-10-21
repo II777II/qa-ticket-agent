@@ -2,7 +2,7 @@
 
 分两层：
 
-- **自动化用例**（83 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务动作、custom 流、异常兜底、Langfuse、事件契约、意图指标、检索、存储、接口与整链；
+- **自动化用例**（83 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
@@ -44,13 +44,13 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 
 | 编号 | 用例 | 步骤 | 预期 |
 | --- | --- | --- | --- |
-| G-01 | 四路条件边 | 输入四种合法 intent 与一个未知 intent | 分别去 knowledge / query / service / fallback |
-| G-02 | 显式意图强制分支 | 构造 `requested_intent` 调图 | 四种值分别锁定对应分支，不再执行自动分类 |
-| G-03 | 强制状态清理 | 同一 thread 先强制 fallback，下一轮传 None | 下一轮恢复自动分类为 knowledge |
+| G-01 | 三类条件边 | 输入 read/write/human 与一个未知 intent | 分别去 read / write / human |
+| G-02 | 显式意图强制分支 | 构造 `requested_intent` 调图 | 三个值分别锁定对应高层分支，不再执行自动分类 |
+| G-03 | 强制状态清理 | 同一 thread 先强制 human，下一轮传 None | 下一轮恢复自动分类为 read |
 | G-04 | 引用写回 state | 问「退款多久到账」 | `retrieved` 非空，第一条来源 `KB-EC-0020.html`，片段长度 ≤ 160 |
-| G-05 | 订单分支跳过 RAG | 问「帮我查询张三的订单」 | `orders` 非空、`retrieved == []` |
+| G-05 | read 的订单工具跳过 RAG | 问「帮我查询张三的订单」 | intent=read、`orders` 非空、`retrieved == []` |
 | G-06 | 售后草稿与缺失槽位 | 说「商品损坏了，帮我建个工单」 | 返回草稿、识别联系人，提示订单号和业务类型缺失，存储仍为 0 张 |
-| G-07 | 投诉走兜底 | 说「我要投诉」 | 命中 fallback 话术 |
+| G-07 | 投诉走人工兜底 | 说「我要投诉」 | intent=human，命中兜底话术 |
 | G-08 | 检索异常降级 | 注入会抛异常的检索器 | 仍返回回答，`retrieved == []`，不抛错 |
 | G-09 | 会话隔离 | 两个 thread_id 各问一轮 | 各自消息累积，互不串味 |
 | G-10 | LangGraph custom 事件 | 直接订阅 `stream_mode="custom"` 执行维修分支 | 收到且只收到一条 `service_draft`，事件载荷含维修槽位 |
@@ -64,21 +64,21 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-02 | 能力查询 | `GET /api/agent-info` | 200，kb_documents=50、orders=50，扩展信息含 Compose 预留 |
 | A-03 | 根路径 | `GET /` | 200，Content-Type 为 html（已构建）或 json（未构建） |
 | A-04 | 旧工单接口已卸载 | `GET /api/tickets` 与详情路径 | 均返回 404 |
-| A-05 | 路由装配 | 读取 OpenAPI paths | 含 `/chat`、四个 `/branch/*` 与 `/branch/service/confirm`，不含 `/api/tickets` |
+| A-05 | 路由装配 | 读取 OpenAPI paths | 含 `/chat`、三个高层 `/branch/*` 与 `/branch/service/confirm`，不含 `/api/tickets` |
 | A-06 | SSE 事件契约（咨询） | 流式问「退款多久到账」 | 序列以 start 开头、done 结尾，含 token 与 citation，不含 tool，正文含 `[1]` |
 | A-07 | 对话不建工单 | 流式说「帮我建个工单」 | 只生成 service_draft，不创建工单 |
 | A-08 | 空消息拦截 | `POST /chat` 传空 message | 422，不进图 |
-| A-09 | 订单 SSE | `POST /chat` 问「帮我查询张三的订单」 | intent=query，含 order、无 citation |
-| A-10 | 四路显式 HTTP 入口 | 同一句分别请求四个业务 `/branch/*` | intent 等于 knowledge / query / service / fallback |
-| A-11 | 分支状态不串线 | 同一 thread 先走 `/branch/fallback`，再走 `/chat` | `/chat` 清除强制意图并自动分流到 knowledge |
+| A-09 | 订单 SSE | `POST /chat` 问「帮我查询张三的订单」 | intent=read，含 order、无 citation |
+| A-10 | 三路显式 HTTP 入口 | 同一句分别请求 `/branch/read`、`write`、`human` | intent 等于 read / write / human |
+| A-11 | 分支状态不串线 | 同一 thread 先走 `/branch/human`，再走 `/chat` | `/chat` 清除强制意图并自动分流到 read |
 | A-12 | 业务草稿 SSE | 问包含订单号、换货、联系人的售后问题 | 收到 `service_draft`，四个槽位完整，ready=true，未写工单 |
 | A-13 | 确认后建单 | 提交 `/branch/service/confirm` | 200，返回 TK 单号并新增工单；重复提交返回原工单 |
 | A-14 | 无效订单拒绝 | 提交不存在的订单号 | 404，不创建工单 |
 | A-15 | 内置 SSE 响应头 | 请求任一 SSE 分支 | `Content-Type=text/event-stream`，`X-Accel-Buffering=no` |
 | A-16 | SSE 上游异常 | ChatService 流抛出 RuntimeError | 已发送的事件保留，末尾增加终止性 `error`，不追加 `done` |
 | A-17 | SSE 序列化异常 | 事件 payload 含不可 JSON 序列化对象 | 转成 `error` 事件，连接不抛未处理异常 |
-| A-19 | 意图指标 | 完成一轮知识问答后读取指标 | `by_intent` 含 knowledge，统计 calls/tokens/延迟/成功率 |
-| A-20 | OpenAPI 语义分组 | 检查四路 SSE 与业务确认 tags | 分支统一为 intent-branches，确认接口为 service-actions |
+| A-19 | 意图指标 | 完成一轮知识问答后读取指标 | `by_intent` 含 read，统计 calls/tokens/延迟/成功率 |
+| A-20 | OpenAPI 语义分组 | 检查三路 SSE 与业务确认 tags | 分支统一为 intent-branches，确认接口为 service-actions |
 
 ## 五、整链（`test_chat_flow.py`）
 
@@ -114,7 +114,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | M-10 | 窄屏布局 | 窗口宽度 < 1100px | 知识库/订单面板移到对话下方，不横向滚动 |
 | M-11 | 后端未启动 | 关掉后端后刷新页面 | 顶部出现「连不上后端」提示并给出启动命令，页面不白屏 |
 | M-12 | 知识库结果面板 | 提问后点顶栏「知识库」；再点历史消息里的引用标签 | 右侧只显示**当前这一轮**的命中；点旧消息引用后切到那一轮结果；点「重查」重新检索本轮回题 |
-| M-13 | 分支接口联调 | 分别直接调用四个 `/branch/*` | 均返回 SSE，intent 固定为对应分支；页面仍通过 `/chat` 正常工作 |
+| M-13 | 分支接口联调 | 分别直接调用三个 `/branch/*` | 均返回 SSE，intent 固定为对应高层分支；页面仍通过 `/chat` 正常工作 |
 | M-14 | 后台指标页 | 跑几轮对话后打开 `#/admin` | Token、首字延迟、请求量、错误率和意图明细有数据；刷新按钮生效 |
 | M-15 | 版本徽标 | 查看首页右上角/侧栏底部 | 显示当前 git 短 hash，可与提交记录对照 |
 | M-16 | 订单查询页 | 打开 `#/orders`，按订单号/状态过滤并点开一条订单 | 列表即时过滤；右侧显示地址、商品明细、金额、支付/退款与状态时间线 |
@@ -129,7 +129,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | 需求（`问答工单.md`） | 覆盖用例 |
 | --- | --- |
 | 智能问答、多轮对话、引用来源 | R-03/R-04/R-08、G-04/G-05/G-08、A-06、E-01、M-01/M-03/M-08 |
-| 四路意图识别与 HTTP 分支路由 | G-01/G-02、A-05/A-10/A-11、E-01、M-19 |
+| 三路意图识别、read 工具分流与 HTTP 分支路由 | G-01/G-02、A-05/A-10/A-11、E-01、M-19 |
 | 业务办理草稿与用户确认 | G-06、A-07/A-12/A-13/A-14、E-02、M-02/M-20 |
 | 记忆与编排、异常降级 | G-03/G-08/G-09、E-03、A-11 |
 | 知识库检索准确性 | R-01~R-09、G-04/G-05、A-06 |

@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 ORDER_NO_RE = re.compile(r"SO\d{12}", re.I)
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 PHONE_RE = re.compile(r"(?<!\d)1[3-9]\d{9}(?!\d)")
-IntentName = Literal["knowledge", "query", "service", "fallback"]
+IntentName = Literal["read", "write", "human"]
 ServiceType = Literal["退货", "换货", "维修", "退款", "补发", "价保", "其他"]
 TicketCategory = Literal[
     "订单与支付", "配送与物流", "退换与售后", "发票与报销",
@@ -25,8 +25,9 @@ ORDER_LOOKUP_HINTS = (
 ORDER_LOOKUP_VERBS = ("查询", "查一下", "查下", "查", "查看", "看下", "进度", "状态", "到哪", "我的")
 KNOWLEDGE_EXCLUSIONS = ("退款", "退货", "发票", "物流", "发货", "规则", "流程", "怎么开", "如何开")
 CREATE_HINTS = ("建单", "建个工单", "创建工单", "提交工单", "售后工单", "帮我建", "帮我提")
-AFTER_SALES_HINTS = ("退货", "换货", "维修", "保修", "价保", "质量问题", "退款失败", "没收到", "损坏")
-FALLBACK_HINTS = ("投诉", "差评", "转人工", "人工客服", "客服电话", "在吗", "你好", "您好", "嗨", "谢谢", "闲聊")
+WRITE_HINTS = ("申请退货", "申请换货", "申请维修", "申请退款", "办理退货", "办理换货", "办理维修", "帮我退", "帮我换", "帮我维修", "我要退", "我要换", "我要维修", "需要维修", "需要换货")
+HUMAN_HINTS = ("投诉", "差评", "转人工", "人工客服", "找人工", "客服电话")
+CHAT_HINTS = ("在吗", "你好", "您好", "嗨", "谢谢", "闲聊")
 SERVICE_TYPE_RULES: tuple[tuple[ServiceType, tuple[str, ...]], ...] = (
     ("换货", ("换货", "换新")), ("退货", ("退货", "退掉")), ("维修", ("维修", "保修")),
     ("退款", ("退款", "退钱")), ("补发", ("补发", "重发")), ("价保", ("价保", "保价")),
@@ -83,22 +84,26 @@ def extract_service_slots(text: str) -> dict[str, str]:
     return slots
 
 
+def is_order_query(text: str) -> bool:
+    return bool(ORDER_NO_RE.search(text)) or any(hint in text for hint in ORDER_LOOKUP_HINTS) or (
+        "订单" in text and any(verb in text for verb in ORDER_LOOKUP_VERBS) and not any(word in text for word in KNOWLEDGE_EXCLUSIONS)
+    )
+
+
 def rule_classify(text: str) -> IntentResult:
-    order_no = ORDER_NO_RE.search(text)
-    if any(word in text for word in CREATE_HINTS + AFTER_SALES_HINTS):
-        return IntentResult(
-            intent="service", confidence=0.85, reason="命中售后/业务办理关键词",
-            slots=extract_service_slots(text),
-        )
-    mentions_order = "订单" in text
-    asks_lookup = any(word in text for word in ORDER_LOOKUP_VERBS)
-    excluded = any(word in text for word in KNOWLEDGE_EXCLUSIONS)
-    if order_no or any(hint in text for hint in ORDER_LOOKUP_HINTS) or (mentions_order and asks_lookup and not excluded):
+    order_query = is_order_query(text)
+    write_request = any(hint in text for hint in CREATE_HINTS + WRITE_HINTS)
+    if any(word in text for word in HUMAN_HINTS) or (
+        len(text.strip()) <= 12 and any(word in text for word in CHAT_HINTS) and not order_query and not write_request
+    ):
+        return IntentResult(intent="human", confidence=0.9, reason="命中投诉/转人工/闲聊规则")
+    if write_request:
+        return IntentResult(intent="write", confidence=0.9, reason="命中售后业务动作", slots=extract_service_slots(text))
+    if order_query:
+        order_no = ORDER_NO_RE.search(text)
         slots = {"order_no": order_no.group(0).upper()} if order_no else {"keyword": extract_order_keyword(text)}
-        return IntentResult(intent="query", confidence=0.9, reason="命中订单查询关键词/订单号", slots=slots)
-    if any(hint in text for hint in FALLBACK_HINTS):
-        return IntentResult(intent="fallback", confidence=0.8, reason="投诉/闲聊/转人工")
-    return IntentResult(intent="knowledge", confidence=0.6, reason="默认走知识库问答")
+        return IntentResult(intent="read", confidence=0.85, reason="只读请求，规则选择订单查询工具", slots=slots)
+    return IntentResult(intent="read", confidence=0.75, reason="只读请求，规则选择知识库工具")
 
 
 class KnowledgeArticle(BaseModel):

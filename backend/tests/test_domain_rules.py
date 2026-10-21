@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.domain.core import TicketCreate, TicketRecord, duplicate_of, next_ticket_id
+from backend.domain.core import (
+    TicketCreate, TicketRecord, duplicate_of, is_order_query, next_ticket_id, rule_classify,
+)
 
 TODAY = date(2026, 10, 16)
 
@@ -57,3 +59,14 @@ def test_duplicate_ignores_different_contact_or_title() -> None:
         contact="b@corp.com",
     )
     assert duplicate_of(existing, other) is None
+
+
+def test_three_way_rule_classifier() -> None:
+    assert rule_classify("退款多久到账").intent == "read"
+    assert rule_classify("订单 SO202609150020 商品损坏，申请换货").intent == "write"
+    assert rule_classify("我要投诉并转人工").intent == "human"
+
+
+def test_read_tool_rules_distinguish_order_and_knowledge() -> None:
+    assert is_order_query("帮我查询张三的订单")
+    assert not is_order_query("退货退款和发票怎么处理")

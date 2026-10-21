@@ -10,7 +10,7 @@ export interface OrderPanelProps {
   question: string;
 }
 
-/** 对话右侧的订单查询结果：跟随当前这一轮 query 分支的结果。 */
+/** 对话右侧的订单查询结果：跟随当前这一轮 read 分支的 order_query 工具结果。 */
 export default function OrderPanel({ orders, question }: OrderPanelProps) {
   return (
     <aside className="side-panel">
@@ -53,7 +53,7 @@ export default function OrderPanel({ orders, question }: OrderPanelProps) {
 
       <div className="panel-foot">
         <Text type="secondary" style={{ fontSize: 11 }}>
-          数据来自确定性 query 分支；完整明细可在订单查询页查看。
+          数据来自 read 分支的确定性 order_query 工具；完整明细可在订单查询页查看。
         </Text>
       </div>
     </aside>

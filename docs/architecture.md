@@ -43,35 +43,36 @@ print(graph.get_graph().draw_ascii())                  # 离线看结构
 flowchart TD
     S([__start__]) --> P["preprocess<br/>trim / 截断"]
     P --> C["classify<br/>LLM 结构化输出 + 规则兜底"]
-    C -- knowledge --> K["knowledge<br/>RAG 检索 + 生成回答"]
-    C -- query --> Q["query<br/>订单仓储查询"]
-    C -- service --> V["service<br/>槽位抽取 + 工单草稿"]
-    C -- fallback --> F["fallback<br/>投诉/转人工/闲聊"]
-    K --> E([__end__])
-    Q --> E
-    V --> E
-    F --> E
+    C -- read --> R["read<br/>规则选择工具"]
+    C -- write --> W["write<br/>槽位抽取 + 工单草稿"]
+    C -- human --> H["human<br/>投诉/转人工/闲聊"]
+    R -. order_query .-> O["订单仓储"]
+    R -. knowledge_search .-> K["RAG 检索 + 回答"]
+    R --> E([__end__])
+    W --> E
+    H --> E
 ```
 
 | 元素 | 说明 |
 | --- | --- |
 | `preprocess` | 取最后一条用户消息，去空白并截断到 2000 字 |
 | `classify` | `classify_intent()`：优先 LLM `with_structured_output`，演示模式/失败时用 `rule_classify()`；产出 intent/confidence/reason/slots |
-| `route_by_intent` | 条件边：只允许 knowledge / query / service / fallback，未知意图走 fallback |
-| `knowledge` | 调用检索器并拼【参考资料】，再 `llm.invoke()` 生成带引用回答 |
-| `query` | 解析订单号/关键词，调用 `JsonOrderStore.get/search`，返回订单列表（不检索） |
-| `service` | 抽取业务类型/订单号/联系人等槽位，生成可编辑草稿；用户确认后才提交 |
-| `fallback` | 投诉/转人工/闲聊兜底话术；演示版无人工坐席 |
+| `route_by_intent` | 条件边：只允许 read / write / human，未知意图走 human |
+| `read` | 按 `is_order_query()` 确定性选择 `order_query` 或 `knowledge_search` 工具 |
+| `order_query` | 解析订单号/关键词，调用 `JsonOrderStore.get/search`，返回订单列表 |
+| `knowledge_search` | 调用检索器并拼【参考资料】，再 `llm.invoke()` 生成带引用回答 |
+| `write` | 抽取业务类型/订单号/联系人等槽位，生成可编辑草稿；用户确认后才提交 |
+| `human` | 投诉/转人工/闲聊兜底话术；演示版无人工坐席 |
 
-knowledge、query、service、fallback 四路都是明确、可测试的执行路径。
+read、write、human 三类都是明确、可测试的执行路径；read 内部工具选择完全由规则决定。
 
 ## Agent 与工具边界
 
-当前 POC 不向模型暴露工具。订单查询由确定性 query 节点调用订单仓储；售后业务只生成
+当前 POC 不向模型暴露工具。read 节点按规则调用订单查询或知识库工具；售后业务只生成
 草稿，用户确认后才通过独立的 `service-actions` 路由创建工单。
 
-订单查询是**只读工具**：`order_lookup` 意图会跳过 RAG（避免把「订单」当成知识问题），
-query 节点直接调用 `JsonOrderStore`；查不到时让用户补订单号，不创建售后工单。
+订单查询是 `read` 分支下的**确定性只读工具**：订单号或订单查询关键词会跳过 RAG，
+直接调用 `JsonOrderStore`；查不到时让用户补订单号，不创建售后工单。
 
 ## 分层与职责
 
@@ -81,7 +82,7 @@ query 节点直接调用 `JsonOrderStore`；查不到时让用户补订单号，
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `core.py` 集中请求模型、全部路由、SSE、FastAPI 与静态托管；`app.py` 是 ASGI 入口 | 不改 |
-| 应用层 | `backend/application/core.py` | `build_graph()` 四路编排、`ChatService`、`AgentRuntime` | 加分支时改当前文件 |
+| 应用层 | `backend/application/core.py` | `build_graph()` 三路编排、read 工具分派、`ChatService`、`AgentRuntime` | 加分支时改当前文件 |
 | 领域层 | `backend/domain/core.py` | 实体、意图/槽位、订单摘要、分类/优先级/去重/单号规则 | 不改 |
 | 基础设施层 | `backend/infrastructure/core.py` | 配置、日志、版本、JSON 仓储、RAG、LLM、指标与 Langfuse | 当前文件内加工厂分支 |
 
@@ -94,10 +95,9 @@ query 节点直接调用 `JsonOrderStore`；查不到时让用户补订单号，
 main app
 └── api/core.py router
     ├── POST /chat
-    ├── POST /branch/knowledge
-    ├── POST /branch/query
-    ├── POST /branch/service
-    ├── POST /branch/fallback
+    ├── POST /branch/read
+    ├── POST /branch/write
+    ├── POST /branch/human
     └── POST /branch/service/confirm
 ```
 
@@ -118,9 +118,10 @@ SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确�
 1. 前端 `streamChat()` 发 `POST /chat`，带 `message` 与 `thread_id`；
 2. `ChatService.stream()` 以 `stream_mode=["messages", "custom", "updates"]` 订阅图；
 3. `preprocess` 清理问题，`classify` 执行 LLM 结构化意图识别，失败时退回规则；
-4. `route_by_intent` 只会进入 knowledge / query / service / fallback 之一；
-5. `/branch/{intent}` 是四个显式 HTTP 入口，会锁定对应分支并跳过再次分类；
-6. 过程中向前端推事件：
+4. `route_by_intent` 只会进入 read / write / human 之一；
+5. `read` 按规则选择 `order_query` 或 `knowledge_search`，不进行第二次模型调用；
+6. `/branch/{intent}` 是三个显式 HTTP 入口，会锁定对应高层意图并跳过再次分类；
+7. 过程中向前端推事件：
 
 Langfuse 启用时，ChatService 会把 `CallbackHandler` 注入 LangGraph 调用配置，并将
 `thread_id` 作为 `langfuse_session_id`；未启用或初始化失败时不注入 callback，主链路继续运行。
@@ -135,10 +136,10 @@ Langfuse 启用时，ChatService 会把 `CallbackHandler` 注入 LangGraph 调�
 | `citation` | 本轮检索命中 | `index` / `source` / `title` / `snippet` / `score` |
 | `done` / `error` | 一轮结束 | —— |
 
-7. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
-8. 前端把 `order` / `citation` / `service_draft` 渲染成气泡底部标签，并切换右侧对应面板；
-9. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
-10. 对话事件契约不包含工单写入；工单只在 service-actions 的 JSON 响应中返回。
+8. `MemorySaver` 按 `thread_id` 保存状态，多轮对话不丢上下文；
+9. 前端把 `order` / `citation` / `service_draft` 渲染成气泡底部标签，并切换右侧对应面板；
+10. 业务草稿阶段不写库；用户核对并确认后才调用 `/branch/service/confirm` 创建工单；
+11. 对话事件契约不包含工单写入；工单只在 service-actions 的 JSON 响应中返回。
 
 SSE 响应由 FastAPI 内置的 `EventSourceResponse + ServerSentEvent` 编码；
 路由函数以异步生成器产出 `ServerSentEvent`，并通过 `response_class=EventSourceResponse`
@@ -153,9 +154,9 @@ SSE 响应由 FastAPI 内置的 `EventSourceResponse + ServerSentEvent` 编码�
 
 ```text
 classify      → intent
-query         → order
-knowledge     → citation
-service       → service_draft
+read/order_query      → order
+read/knowledge_search → citation
+write                 → service_draft
 ```
 
 ChatService 不再从 updates 中反推这些业务事件。状态仍写回 LangGraph checkpoint；
@@ -178,7 +179,7 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 进程内指标只保留 KPI 和最终意图聚合 `calls / tokens / avg_latency_ms / success_rate`，
 用于后续按知识问答、订单、业务办理和兜底分支分别优化。
 | 前端 API | `streamChat()` fetch + SSE | `api/agent.ts` | useStream / WebSocket | 只改这一个文件 |
-| 编排 | preprocess + classify + 四路分支 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
+| 编排 | preprocess + classify + 三类分支 | LangGraph StateGraph | Planner/Executor/Validator/Summarizer | 加节点与条件边，现有节点不动 |
 
 ## 几个刻意的设计取舍
 

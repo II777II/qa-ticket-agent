@@ -1,4 +1,4 @@
-"""编排用例：预处理 → 意图识别 → 四路路由。"""
+"""编排用例：预处理 → 三路意图识别 → read 工具分派。"""
 
 from __future__ import annotations
 
@@ -22,15 +22,14 @@ def _build(store: JsonTicketStore, retriever=None):
     )
 
 
-def test_route_by_intent_maps_five_ways() -> None:
-    assert route_by_intent({"messages": [], "intent": "knowledge"}) == "knowledge"
-    assert route_by_intent({"messages": [], "intent": "query"}) == "query"
-    assert route_by_intent({"messages": [], "intent": "service"}) == "service"
-    assert route_by_intent({"messages": [], "intent": "fallback"}) == "fallback"
-    assert route_by_intent({"messages": [], "intent": "unknown"}) == "fallback"
+def test_route_by_intent_maps_three_ways() -> None:
+    assert route_by_intent({"messages": [], "intent": "read"}) == "read"
+    assert route_by_intent({"messages": [], "intent": "write"}) == "write"
+    assert route_by_intent({"messages": [], "intent": "human"}) == "human"
+    assert route_by_intent({"messages": [], "intent": "unknown"}) == "human"
 
 
-@pytest.mark.parametrize("intent", ["knowledge", "query", "service", "fallback"])
+@pytest.mark.parametrize("intent", ["read", "write", "human"])
 def test_requested_intent_forces_graph_branch(
     store: JsonTicketStore,
     retriever: InMemoryRetriever,
@@ -45,7 +44,6 @@ def test_requested_intent_forces_graph_branch(
         {"configurable": {"thread_id": f"forced-{intent}"}},
     )
     assert state["intent"] == intent
-    assert state["intent_reason"] == "由显式 HTTP 分支路由指定"
 
 
 def test_next_turn_clears_requested_intent(
@@ -57,7 +55,7 @@ def test_next_turn_clears_requested_intent(
     graph.invoke(
         {
             "messages": [HumanMessage(content="退款多久到账？")],
-            "requested_intent": "fallback",
+            "requested_intent": "human",
         },
         config,
     )
@@ -68,38 +66,37 @@ def test_next_turn_clears_requested_intent(
         },
         config,
     )
-    assert state["intent"] == "knowledge"
-    assert state["intent_reason"] != "由显式 HTTP 分支路由指定"
+    assert state["intent"] == "read"
 
 
-def test_knowledge_branch_retrieves(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:
+def test_read_branch_uses_knowledge_tool(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:
     graph = _build(store, retriever)
     state = graph.invoke({"messages": [HumanMessage(content="退款多久到账？")]}, {"configurable": {"thread_id": "t1"}})
-    assert state["intent"] == "knowledge"
+    assert state["intent"] == "read"
     assert state["retrieved"]
     assert state["retrieved"][0]["source"] == "KB-EC-0020.html"
     assert isinstance(state["messages"][-1], AIMessage)
     assert "[1]" in state["messages"][-1].content
 
 
-def test_query_branch_returns_orders_without_rag(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:
+def test_read_branch_uses_order_tool_without_rag(store: JsonTicketStore, retriever: InMemoryRetriever) -> None:
     graph = _build(store, retriever)
     state = graph.invoke(
         {"messages": [HumanMessage(content="帮我查询张三的订单")]}, {"configurable": {"thread_id": "t2"}}
     )
-    assert state["intent"] == "query"
+    assert state["intent"] == "read"
     assert state["orders"]
     assert state.get("retrieved", []) == []
     assert "SO" in state["messages"][-1].content
 
 
-def test_service_branch_builds_draft_only(store: JsonTicketStore) -> None:
+def test_write_branch_builds_draft_only(store: JsonTicketStore) -> None:
     graph = _build(store)
     state = graph.invoke(
         {"messages": [HumanMessage(content="商品损坏了，帮我建个工单，联系我 a@corp.com")]},
         {"configurable": {"thread_id": "t3"}},
     )
-    assert state["intent"] == "service"
+    assert state["intent"] == "write"
     assert state["draft"]["status"] == "draft"
     assert state["draft"]["contact"] == "a@corp.com"
     assert "order_no" in state["draft"]["missing"]
@@ -122,7 +119,7 @@ def test_service_draft_recognizes_complete_slots(store: JsonTicketStore) -> None
         {"configurable": {"thread_id": "service-ready"}},
     )
     draft = state["draft"]
-    assert state["intent"] == "service"
+    assert state["intent"] == "write"
     assert draft["ready"] is True
     assert draft["missing"] == []
     assert draft["order_no"] == "SO202609150020"
@@ -160,10 +157,10 @@ def test_service_node_emits_langgraph_custom_event(
     assert drafts[0]["data"]["service_type"] == "维修"
 
 
-def test_fallback_branch_for_complaint(store: JsonTicketStore) -> None:
+def test_human_branch_for_complaint(store: JsonTicketStore) -> None:
     graph = _build(store)
     state = graph.invoke({"messages": [HumanMessage(content="我要投诉")]}, {"configurable": {"thread_id": "t4"}})
-    assert state["intent"] == "fallback"
+    assert state["intent"] == "human"
     assert "投诉" in state["messages"][-1].content or "转人工" in state["messages"][-1].content
 
 

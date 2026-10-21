@@ -62,7 +62,7 @@ def _chat_endpoint(intent=None):
 
 
 router.add_api_route("/chat", _chat_endpoint(), methods=["POST"], tags=["chat"], response_class=EventSourceResponse)
-for _intent in ("knowledge", "query", "service", "fallback"):
+for _intent in ("read", "write", "human"):
     router.add_api_route(
         f"/branch/{_intent}", _chat_endpoint(_intent), methods=["POST"],
         tags=["intent-branches"], response_class=EventSourceResponse,
@@ -139,7 +139,7 @@ async def root():
         return FileResponse(index)
     return {
         "name": "qa-ticket-agent", "docs": "/docs", "health": "/health", "chat": "POST /chat",
-        "branches": {x: f"POST /branch/{x}" for x in ("knowledge", "query", "service", "fallback")},
+        "branches": {x: f"POST /branch/{x}" for x in ("read", "write", "human")},
     }
 
 
@@ -158,7 +158,7 @@ def create_app() -> FastAPI:
     setup_logging()
     app = FastAPI(
         title="电商智能助手 POC",
-        description="自然语言提问 -> LLM 意图识别 -> 知识库 / 订单 / 售后 / 兜底四路。",
+        description="自然语言提问 -> read / write / human 三路；read 内确定性调用知识库或订单工具。",
         version="0.1.0", lifespan=lifespan,
     )
     app.add_middleware(

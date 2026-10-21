@@ -1,4 +1,4 @@
-"""接口用例：健康检查、能力查询、四路分支与 SSE 事件契约。"""
+"""接口用例：健康检查、能力查询、三路分支与 SSE 事件契约。"""
 
 from __future__ import annotations
 
@@ -93,36 +93,33 @@ def test_ticket_routes_are_not_mounted(isolated_runtime: AgentRuntime) -> None:
     assert asyncio.run(_get("/api/tickets/TK-19700101-0001")).status_code == 404
 
 
-def test_openapi_mounts_chat_and_five_branch_routes() -> None:
+def test_openapi_mounts_chat_and_three_branch_routes() -> None:
     paths = api_app.openapi()["paths"]
     assert "/chat" in paths
-    assert paths["/branch/knowledge"]["post"]
-    assert paths["/branch/query"]["post"]
-    assert paths["/branch/service"]["post"]
+    assert paths["/branch/read"]["post"]
+    assert paths["/branch/write"]["post"]
     assert paths["/branch/service/confirm"]["post"]
-    assert paths["/branch/fallback"]["post"]
+    assert paths["/branch/human"]["post"]
     assert "/api/tickets" not in paths
 
 
 def test_dialogue_router_owns_chat_and_intent_branches_only() -> None:
-    """单一聚合路由保留对话入口和四路意图入口。"""
+    """单一聚合路由保留对话入口和三类意图入口。"""
     paths = {route.path for route in router.routes}
     assert {
         "/chat",
-        "/branch/knowledge",
-        "/branch/query",
-        "/branch/service",
-        "/branch/fallback",
+        "/branch/read",
+        "/branch/write",
+        "/branch/human",
     }.issubset(paths)
 
 
 def test_openapi_separates_intent_branches_and_service_actions() -> None:
     paths = api_app.openapi()["paths"]
     for path in (
-        "/branch/knowledge",
-        "/branch/query",
-        "/branch/service",
-        "/branch/fallback",
+        "/branch/read",
+        "/branch/write",
+        "/branch/human",
     ):
         assert paths[path]["post"]["tags"] == ["intent-branches"]
     assert paths["/branch/service/confirm"]["post"]["tags"] == ["service-actions"]
@@ -147,7 +144,7 @@ def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
     assert kpis["tokens"] > 0
     assert kpis["avg_latency_ms"] > 0
     assert kpis["avg_first_token_ms"] >= 0
-    assert summary["by_intent"][0]["intent"] == "knowledge"
+    assert summary["by_intent"][0]["intent"] == "read"
 
 
 def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:
@@ -176,7 +173,7 @@ def test_builtin_event_source_response_headers(isolated_runtime: AgentRuntime) -
         async with _client() as client:
             async with client.stream(
                 "POST",
-                "/branch/fallback",
+                "/branch/human",
                 json={"message": "你好", "thread_id": "sse-headers"},
             ) as response:
                 return (
@@ -190,7 +187,7 @@ def test_builtin_event_source_response_headers(isolated_runtime: AgentRuntime) -
 
 
 def test_service_request_does_not_create_ticket_before_confirmation(isolated_runtime: AgentRuntime) -> None:
-    """service 分支只生成草稿，不直接创建工单。"""
+    """write 分支只生成草稿，不直接创建工单。"""
     _prepare(isolated_runtime)
     events = asyncio.run(_stream_chat("帮我建个售后工单，商品有质量问题，联系我 wang.wu@corp.com", "api-3"))
     assert "service_draft" in [name for name, _ in events]
@@ -238,7 +235,7 @@ def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:
     assert "citation" not in names
     assert "order" in names
     intents = [payload for name, payload in events if name == "intent"]
-    assert intents and intents[-1]["intent"] == "query"
+    assert intents and intents[-1]["intent"] == "read"
     text = "".join(payload["text"] for name, payload in events if name == "token")
     assert "SO" in text
 
@@ -314,10 +311,9 @@ def test_service_confirmation_rejects_unknown_order(isolated_runtime: AgentRunti
 @pytest.mark.parametrize(
     ("path", "expected_intent"),
     [
-        ("/branch/knowledge", "knowledge"),
-        ("/branch/query", "query"),
-        ("/branch/service", "service"),
-        ("/branch/fallback", "fallback"),
+        ("/branch/read", "read"),
+        ("/branch/write", "write"),
+        ("/branch/human", "human"),
     ],
 )
 def test_explicit_branch_routes_force_intent(
@@ -325,7 +321,7 @@ def test_explicit_branch_routes_force_intent(
     path: str,
     expected_intent: str,
 ) -> None:
-    """同一句默认会走 knowledge 的话，显式分支入口必须进入指定分支。"""
+    """同一句显式分支入口必须锁定对应的高层意图。"""
     _prepare(isolated_runtime)
     events = asyncio.run(
         _stream_post(path, "退款多久到账？", f"branch-{expected_intent}")
@@ -345,9 +341,9 @@ def test_explicit_branch_does_not_leak_into_next_chat_request(isolated_runtime: 
     """显式分支写下的强制意图，必须被同一 thread_id 的 /chat 自动分类清除。"""
     _prepare(isolated_runtime)
     thread_id = "branch-reset"
-    asyncio.run(_stream_post("/branch/fallback", "退款多久到账？", thread_id))
+    asyncio.run(_stream_post("/branch/human", "退款多久到账？", thread_id))
     events = asyncio.run(_stream_chat("退款多久到账？", thread_id))
 
     intent = [payload for name, payload in events if name == "intent"][-1]
-    assert intent["intent"] == "knowledge"
+    assert intent["intent"] == "read"
     assert intent["reason"] != "由显式 HTTP 分支路由指定"

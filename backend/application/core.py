@@ -14,8 +14,8 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.types import StreamWriter
 
 from backend.domain.core import (
-    ORDER_NO_RE, IntentName, IntentResult, extract_order_keyword, extract_service_slots,
-    guess_category, rule_classify,
+    HUMAN_HINTS, ORDER_NO_RE, IntentName, IntentResult, extract_order_keyword,
+    extract_service_slots, guess_category, is_order_query, rule_classify,
 )
 from backend.infrastructure.core import (
     LangfuseTracing, MetricsCollector, create_checkpointer, create_knowledge_catalog,
@@ -26,9 +26,8 @@ from backend.infrastructure.core import (
 EVENT_START, EVENT_INTENT, EVENT_TOKEN = "start", "intent", "token"
 EVENT_ORDER, EVENT_SERVICE_DRAFT, EVENT_CITATION = "order", "service_draft", "citation"
 EVENT_DONE, EVENT_ERROR = "done", "error"
-INTENTS = ("knowledge", "query", "service", "fallback")
-TRANSFER_HINTS = ("转人工", "人工客服", "找人工", "客服电话", "投诉", "差评")
-CLASSIFIER_PROMPT = "把用户消息分类为 knowledge、query、service、fallback 之一。只输出 IntentResult JSON，不要 Markdown。"
+INTENTS = ("read", "write", "human")
+CLASSIFIER_PROMPT = "把用户消息分类为 read（只读查询）、write（业务办理）、human（投诉/转人工/闲聊）之一。只输出 IntentResult JSON，不要 Markdown。"
 SYSTEM_PROMPT = "你是电商智能客服。基于【参考资料】回答并标引用编号；不要编造订单或规则。信息不足先追问。售后不会直接建单，只有用户在右侧确认后才提交。"
 logger = logging.getLogger("qa_ticket")
 
@@ -37,8 +36,6 @@ class AgentState(MessagesState):
     question: NotRequired[str]
     requested_intent: NotRequired[IntentName | None]
     intent: NotRequired[str]
-    confidence: NotRequired[float]
-    intent_reason: NotRequired[str]
     slots: NotRequired[dict[str, str]]
     retrieved: NotRequired[list[dict[str, Any]]]
     orders: NotRequired[list[dict[str, Any]]]
@@ -80,14 +77,11 @@ def _classify(llm: BaseChatModel) -> Callable[[AgentState, StreamWriter], dict[s
             "intent": result.intent, "confidence": result.confidence,
             "reason": result.reason, "slots": result.slots,
         })
-        return {
-            "intent": result.intent, "confidence": result.confidence,
-            "intent_reason": result.reason, "slots": result.slots,
-        }
+        return {"intent": result.intent, "slots": result.slots}
     return node
 
 
-def _knowledge(llm: BaseChatModel, retriever: Any | None, prompt: str) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
+def _knowledge_tool(llm: BaseChatModel, retriever: Any | None, prompt: str) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
     def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
         docs: list[Document] = []
         if retriever is not None:
@@ -110,7 +104,7 @@ def _knowledge(llm: BaseChatModel, retriever: Any | None, prompt: str) -> Callab
     return node
 
 
-def _query(orders: Any | None) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
+def _order_tool(orders: Any | None) -> Callable[[AgentState, StreamWriter], dict[str, Any]]:
     def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
         question = state["question"]
         if orders is None:
@@ -135,7 +129,15 @@ def _query(orders: Any | None) -> Callable[[AgentState, StreamWriter], dict[str,
     return node
 
 
-def _service(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
+def _read(llm: BaseChatModel, retriever: Any | None, orders: Any | None, prompt: str):
+    knowledge = _knowledge_tool(llm, retriever, prompt)
+    order = _order_tool(orders)
+    def node(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
+        return order(state, writer) if is_order_query(state["question"]) else knowledge(state, writer)
+    return node
+
+
+def _write(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
     question = state["question"]
     slots = {**state.get("slots", {}), **extract_service_slots(question)}
     order_no, contact = slots.get("order_no", ""), slots.get("contact", "")
@@ -161,21 +163,22 @@ def _service(state: AgentState, writer: StreamWriter) -> dict[str, Any]:
     return {"messages": [AIMessage(content=text)], "draft": draft}
 
 
-def _fallback(state: AgentState) -> dict[str, Any]:
-    text = "已收到转人工/投诉请求。当前演示版未接入人工坐席，请先查看帮助中心规则。" if any(x in state["question"] for x in TRANSFER_HINTS) else "你好，我可以查询订单、解释帮助中心规则，或整理售后业务草稿。"
+def _human(state: AgentState) -> dict[str, Any]:
+    text = "已收到转人工/投诉请求。当前演示版未接入人工坐席，请先查看帮助中心规则。" if any(x in state["question"] for x in HUMAN_HINTS) else "你好，我可以查询订单、解释帮助中心规则，或整理售后业务草稿。"
     return {"messages": [AIMessage(content=text)]}
 
 
 def route_by_intent(state: AgentState) -> str:
-    return state.get("intent", "fallback") if state.get("intent") in INTENTS else "fallback"
+    return state.get("intent", "human") if state.get("intent") in INTENTS else "human"
 
 
 def build_graph(*, llm: BaseChatModel, retriever: Any | None = None, checkpointer: Any | None = None,
                 order_service: Any | None = None, system_prompt: str = SYSTEM_PROMPT):
     graph = StateGraph(AgentState)
     nodes = {
-        "preprocess": _preprocess, "classify": _classify(llm), "knowledge": _knowledge(llm, retriever, system_prompt),
-        "query": _query(order_service), "service": _service, "fallback": _fallback,
+        "preprocess": _preprocess, "classify": _classify(llm),
+        "read": _read(llm, retriever, order_service, system_prompt),
+        "write": _write, "human": _human,
     }
     for name, node in nodes.items():
         graph.add_node(name, node)

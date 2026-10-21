@@ -149,18 +149,17 @@ def _display_in_jupyter(png: bytes) -> None:
 
 
 def _annotate(mermaid: str, *, has_retriever: bool) -> str:
-    """给四路图节点与条件边补上中文说明。"""
+    """给三路图节点与条件边补上中文说明。"""
     labels = {
         "preprocess": "preprocess<br/>清洗 / 截断",
         "classify": "classify<br/>意图识别 + 规则兜底",
-        "knowledge": "knowledge<br/>RAG 问答",
-        "query": "query<br/>订单查询",
-        "service": "service<br/>工单草稿",
-        "fallback": "fallback<br/>投诉 / 闲聊 / 转人工",
+        "read": "read<br/>规则选择知识库/订单工具",
+        "write": "write<br/>业务草稿",
+        "human": "human<br/>投诉 / 闲聊 / 转人工",
     }
     for node, label in labels.items():
         mermaid = re.sub(rf"(?m)^(\s*){node}\({node}\)\s*$", rf'\1{node}["{label}"]', mermaid)
-    for branch in ("knowledge", "query", "service", "fallback"):
+    for branch in ("read", "write", "human"):
         mermaid = re.sub(
             rf"(?m)^(\s*)classify\s*-\.->\s*{branch};",
             rf"\1classify -.->|{branch}| {branch};",

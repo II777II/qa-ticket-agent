@@ -35,7 +35,7 @@ def test_full_demo_flow(isolated_runtime: AgentRuntime) -> None:
     assert consulted["citations"], "应命中知识库并回传引用"
     assert "[1]" in consulted["text"]
 
-    # 2. 订单查询：走确定性 query，不出引用、不建单
+    # 2. 订单查询：read 分支确定性调用 order_query，不出引用、不建单
     ordered = _turn(runtime, "帮我查询张三的订单", thread)
     assert ordered["orders"], "应返回张三的订单"
     assert not ordered["citations"]
@@ -75,8 +75,8 @@ def test_unknown_question_falls_back_without_citation(isolated_runtime: AgentRun
     assert result["text"]
 
 
-def test_order_query_uses_deterministic_branch_without_rag(isolated_runtime: AgentRuntime) -> None:
-    """「查张三的订单」应走 query 分支，不引用知识库、也不建售后工单。"""
+def test_order_query_uses_deterministic_tool_without_rag(isolated_runtime: AgentRuntime) -> None:
+    """「查张三的订单」应走 read 分支的 order_query 工具，不引用知识库、也不建售后工单。"""
     result = _turn(isolated_runtime, "帮我查询张三的订单", "flow-order")
     assert result["orders"]
     assert result["citations"] == []
