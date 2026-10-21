@@ -108,6 +108,10 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | GET | `/api/orders?order_no=&user_id=` | 电商订单查询；必须提供精确订单号或 user_id |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
+`/branch/read`、`/branch/write`、`/branch/human` 暂时保留，仅用于接口测试、
+联调和演示强制分流。前端正式对话统一使用 `/chat`，由分类器自动选择三类意图。
+`/branch/service/confirm` 是用户确认后的业务动作，不属于调试分支。
+
 模型切换调用 `AgentRuntime.reconfigure_llm()`：锁内重新编译 LangGraph 并原子替换
 `graph/llm/provider/model`。切换前已开始的流继续使用旧图，新请求通过 `snapshot()` 使用新图。
 
