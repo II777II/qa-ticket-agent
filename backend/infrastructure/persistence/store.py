@@ -10,9 +10,9 @@ from datetime import datetime
 from pathlib import Path
 
 from backend.domain.knowledge import KnowledgeArticle, KnowledgeCategory
-from backend.domain.models import TicketCreate, TicketEvent, TicketRecord
+from backend.domain.models import TicketCreate, TicketRecord
 from backend.domain.orders import OrderRecord
-from backend.domain.rules import duplicate_of, next_ticket_id, validate_status
+from backend.domain.rules import duplicate_of, next_ticket_id
 from backend.infrastructure.config import settings
 
 logger = logging.getLogger("qa_ticket.store")
@@ -59,27 +59,10 @@ class JsonTicketStore:
         tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, self.path)
 
-    def get(self, ticket_id: str) -> TicketRecord | None:
-        return self._tickets.get(ticket_id.strip().upper())
-
-    def list(
-        self,
-        *,
-        status: str | None = None,
-        contact: str | None = None,
-        limit: int | None = 20,
-    ) -> list[TicketRecord]:
-        rows = sorted(self._tickets.values(), key=lambda row: row.created_at, reverse=True)
-        if status:
-            rows = [row for row in rows if row.status == status]
-        if contact:
-            rows = [row for row in rows if contact.strip().lower() in row.contact.lower()]
-        return rows[:limit] if limit else rows
-
     def count(self) -> int:
         return len(self._tickets)
 
-    def create(self, payload: TicketCreate, *, source: str = "agent") -> tuple[TicketRecord, bool]:
+    def create(self, payload: TicketCreate) -> tuple[TicketRecord, bool]:
         with self._lock:
             existing = duplicate_of(list(self._tickets.values()), payload)
             if existing:
@@ -88,36 +71,12 @@ class JsonTicketStore:
             record = TicketRecord(
                 id=next_ticket_id(self._tickets),
                 status="待受理",
-                source=source,
                 created_at=now,
-                updated_at=now,
-                events=[TicketEvent(at=now, action="创建工单", note=payload.description[:120], actor=source)],
                 **payload.model_dump(),
             )
             self._tickets[record.id] = record
             self._save()
             return record, False
-
-    def add_event(
-        self,
-        ticket_id: str,
-        action: str,
-        *,
-        note: str = "",
-        actor: str = "agent",
-        status: str | None = None,
-    ) -> TicketRecord | None:
-        with self._lock:
-            record = self._tickets.get(ticket_id.strip().upper())
-            if record is None:
-                return None
-            if status is not None:
-                validate_status(status)
-                record.status = status
-            record.updated_at = _now()
-            record.events.append(TicketEvent(at=record.updated_at, action=action, note=note, actor=actor))
-            self._save()
-            return record
 
 
 class JsonOrderStore:

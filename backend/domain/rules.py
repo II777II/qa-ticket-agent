@@ -9,8 +9,6 @@ from __future__ import annotations
 from datetime import date
 from typing import TYPE_CHECKING, Iterable, Literal, Sequence, get_args
 
-from backend.domain.errors import UnknownStatusError
-
 if TYPE_CHECKING:  # 只用于类型标注，避免与 models.py 形成运行时循环导入
     from backend.domain.models import TicketCreate, TicketRecord
 
@@ -24,25 +22,9 @@ TicketCategory = Literal[
     "其他",
 ]
 TicketPriority = Literal["紧急", "高", "中", "低"]
-TicketStatus = Literal["待受理", "处理中", "待用户确认", "已关闭"]
 
 TICKET_CATEGORIES: tuple[str, ...] = get_args(TicketCategory)
 TICKET_PRIORITIES: tuple[str, ...] = get_args(TicketPriority)
-TICKET_STATUSES: tuple[str, ...] = get_args(TicketStatus)
-
-CLOSED_STATUS: str = "已关闭"
-INITIAL_STATUS: str = "待受理"
-
-
-def validate_status(status: str) -> str:
-    """校验状态取值；非法就抛领域异常，错误文案由领域层统一负责。"""
-    if status not in TICKET_STATUSES:
-        raise UnknownStatusError(f"未知工单状态: {status!r}，可选 {TICKET_STATUSES}")
-    return status
-
-
-def is_closed(status: str) -> bool:
-    return status == CLOSED_STATUS
 
 
 def next_ticket_id(existing_ids: Iterable[str], today: date | None = None) -> str:
@@ -67,6 +49,6 @@ def duplicate_of(existing: Sequence["TicketRecord"], payload: "TicketCreate") ->
     contact = payload.contact.strip().lower()
     title = payload.title.strip()
     for record in existing:
-        if record.contact.strip().lower() == contact and record.title.strip() == title and not is_closed(record.status):
+        if record.contact.strip().lower() == contact and record.title.strip() == title:
             return record
     return None

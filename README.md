@@ -159,7 +159,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 107 个用例，约 10 秒
+python -m pytest            # 97 个用例，约 9 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -221,7 +221,7 @@ backend/
     agent/             Agent 关注点：graph.py（编排）、tools.py（工具适配）、prompts.py（提示词）
     chat/service.py    用例：一轮对话（驱动图 + 翻译 token/order/service_draft/citation 事件）
     contracts/         跨 Agent/Chat/API 的对话事件契约（EVENT_*）
-    tickets/service.py 用例：建单 / 查进度 / 催单 / 转人工
+    tickets/service.py 用例：确认后创建工单与计数
     orders/service.py  用例：电商订单查询
     knowledge/service.py 用例：知识库目录浏览/搜索
   infrastructure/      基础设施层

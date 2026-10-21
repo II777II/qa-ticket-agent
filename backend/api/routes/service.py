@@ -28,7 +28,6 @@ async def confirm_service(
             priority=req.priority,
             contact=req.contact,
         ),
-        source="service-panel",
     )
     message = "该业务已提交过，返回原工单。" if duplicated else "业务办理已提交。"
     return ServiceConfirmResponse(

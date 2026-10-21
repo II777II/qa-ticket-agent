@@ -4,7 +4,7 @@
     create_runtime()    调用各工厂，组装 LLM / 工具 / 检索 / 记忆 / 工单存储 / 图
     AgentRuntime        持有装配结果，供用例层与接口层取用（describe() 用来说清装配了什么）
 
-「一轮对话怎么跑」在 application/chat/service.py，「建单/催单/转人工」在
+「一轮对话怎么跑」在 application/chat/service.py，确认后的工单创建在
 application/tickets/service.py——它们只依赖这里产出的对象。
 """
 

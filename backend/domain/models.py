@@ -7,16 +7,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from backend.domain.rules import INITIAL_STATUS, TicketCategory, TicketPriority, TicketStatus
-
-
-class TicketEvent(BaseModel):
-    """工单时间线的一条记录：建单、补充信息、催单、转人工都落这里。"""
-
-    at: str
-    action: str
-    note: str = ""
-    actor: str = "agent"
+from backend.domain.rules import TicketCategory, TicketPriority
 
 
 class TicketCreate(BaseModel):
@@ -45,8 +36,5 @@ class TicketRecord(TicketCreate):
     """落库后的完整工单。"""
 
     id: str
-    status: TicketStatus = INITIAL_STATUS
-    source: str = "agent"
+    status: str = "待受理"
     created_at: str
-    updated_at: str
-    events: list[TicketEvent] = Field(default_factory=list)
