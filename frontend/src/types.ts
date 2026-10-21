@@ -177,12 +177,21 @@ export interface ModelMetric {
   success_rate: number;
 }
 
+export interface IntentMetric {
+  intent: string;
+  calls: number;
+  tokens: number;
+  avg_latency_ms: number;
+  success_rate: number;
+}
+
 export interface MetricsSummary {
   days: number;
   generated_at: string;
   kpis: MetricsKpi;
   by_day: DayMetric[];
   by_model: ModelMetric[];
+  by_intent: IntentMetric[];
 }
 
 /** 本地保存的一次会话（localStorage） */

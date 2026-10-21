@@ -19,6 +19,8 @@ from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, Too
 from backend.application.contracts import (
     EVENT_DONE,
     EVENT_ERROR,
+    EVENT_INTENT,
+    EVENT_ORDER,
     EVENT_START,
     EVENT_TICKET,
     EVENT_TOKEN,
@@ -137,6 +139,7 @@ class ChatService:
         final_text = ""
         usage_tokens = 0
         ok = True
+        resolved_intent = requested_intent or "unknown"
         try:
             async for mode, payload in self._runtime.graph.astream(
                 {
@@ -173,6 +176,8 @@ class ChatService:
                     event = payload.get("event")
                     data = payload.get("data")
                     if isinstance(event, str) and isinstance(data, dict):
+                        if event == EVENT_INTENT and isinstance(data.get("intent"), str):
+                            resolved_intent = data["intent"]
                         yield event, data
                 elif mode == "updates":
                     for event, data in _tool_events(payload):
@@ -205,4 +210,5 @@ class ChatService:
                 first_token_ms=first_ms,
                 total_ms=total_ms,
                 ok=ok,
+                intent=resolved_intent,
             )

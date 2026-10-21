@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（109 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、异常兜底、Langfuse、包契约、检索、存储、工具、接口与整链；
+- **自动化用例**（111 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、异常兜底、Langfuse、包契约、意图指标、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 109 passed in ~12s
+python -m pytest              # 111 passed in ~12s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -98,6 +98,8 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-15 | 内置 SSE 响应头 | 请求任一 SSE 分支 | `Content-Type=text/event-stream`，`X-Accel-Buffering=no` |
 | A-16 | SSE 上游异常 | ChatService 流抛出 RuntimeError | 已发送的事件保留，末尾增加终止性 `error`，不追加 `done` |
 | A-17 | SSE 序列化异常 | 事件 payload 含不可 JSON 序列化对象 | 转成 `error` 事件，连接不抛未处理异常 |
+| A-18 | 工具订单事件 | `query_order` 返回 orders 的 ToolMessage | 正常产生 `order` 事件，不因漏导入报错 |
+| A-19 | 意图指标 | 完成一轮知识问答后读取指标 | `by_intent` 含 knowledge，统计 calls/tokens/延迟/成功率 |
 
 ## 六、整链（`test_chat_flow.py`）
 
@@ -141,6 +143,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | M-18 | 对话查订单 | 在对话里输入「帮我查询张三的订单」 | 列出订单并切换右侧订单面板；没有引用、没有新建工单 |
 | M-19 | 意图路由徽标 | 依次输入退款问答、张三订单、商品损坏、我要投诉 | 顶栏路由依次显示：知识咨询 / 订单查询 / 业务办理 / 兜底·转人工 |
 | M-20 | 业务办理确认 | 补齐业务类型、订单号、联系人、描述并勾选确认 | “确认提交”前不可用；提交后显示工单号和状态 |
+| M-21 | 意图调用明细 | 跑几轮不同意图后打开后台 | 意图表按调用次数排序，显示 Token、平均延迟和成功率 |
 
 ## 九、需求 → 用例覆盖
 

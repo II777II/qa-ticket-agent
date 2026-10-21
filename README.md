@@ -159,7 +159,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 109 个用例，约 12 秒
+python -m pytest            # 111 个用例，约 12 秒
 python -m pytest -v         # 看每个用例名
 ```
 

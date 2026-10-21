@@ -107,6 +107,14 @@ class ModelMetric(BaseModel):
     success_rate: float = 100.0
 
 
+class IntentMetric(BaseModel):
+    intent: str
+    calls: int = 0
+    tokens: int = 0
+    avg_latency_ms: float = 0.0
+    success_rate: float = 100.0
+
+
 class MetricsSummary(BaseModel):
     """后台管理页的数据源：KPI + 按天趋势 + 按模型明细。"""
 
@@ -115,6 +123,7 @@ class MetricsSummary(BaseModel):
     kpis: MetricsKpi = Field(default_factory=MetricsKpi)
     by_day: list[DayMetric] = Field(default_factory=list)
     by_model: list[ModelMetric] = Field(default_factory=list)
+    by_intent: list[IntentMetric] = Field(default_factory=list)
 
 
 # 工单实体与业务规则已下沉到领域层（backend/domain/）：

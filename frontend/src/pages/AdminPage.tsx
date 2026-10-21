@@ -40,6 +40,7 @@ export default function AdminPage({ info }: { info: AgentInfo | null }) {
   const kpis = metrics?.kpis;
   const byDay = metrics?.by_day ?? [];
   const rows = (metrics?.by_model ?? []).map((row) => ({ ...row, key: row.model }));
+  const intentRows = (metrics?.by_intent ?? []).map((row) => ({ ...row, key: row.intent }));
 
   return (
     <div className="shell">
@@ -129,6 +130,32 @@ export default function AdminPage({ info }: { info: AgentInfo | null }) {
               locale={{ emptyText: "跑几轮对话后这里会出现数据（进程内统计，重启清零）" }}
               columns={[
                 { title: "模型", dataIndex: "model", key: "model" },
+                { title: "调用次数", dataIndex: "calls", key: "calls", align: "right" as const },
+                { title: "Token 消耗", dataIndex: "tokens", key: "tokens", align: "right" as const, render: (value: number) => formatNumber(value) },
+                { title: "平均延迟", dataIndex: "avg_latency_ms", key: "latency", align: "right" as const, render: (value: number) => `${Math.round(value)} ms` },
+                {
+                  title: "成功率",
+                  dataIndex: "success_rate",
+                  key: "success",
+                  align: "right" as const,
+                  render: (value: number) => <span className={value >= 99 ? "ok-text" : ""}>{value}%</span>,
+                },
+              ]}
+            />
+          </div>
+
+          <div className="table-card">
+            <div className="chart-head">
+              <span>意图调用明细</span>
+              <span className="muted">按调用次数排序</span>
+            </div>
+            <Table
+              size="small"
+              pagination={false}
+              dataSource={intentRows}
+              locale={{ emptyText: "跑几轮对话后这里会按意图聚合数据" }}
+              columns={[
+                { title: "意图", dataIndex: "intent", key: "intent" },
                 { title: "调用次数", dataIndex: "calls", key: "calls", align: "right" as const },
                 { title: "Token 消耗", dataIndex: "tokens", key: "tokens", align: "right" as const, render: (value: number) => formatNumber(value) },
                 { title: "平均延迟", dataIndex: "avg_latency_ms", key: "latency", align: "right" as const, render: (value: number) => `${Math.round(value)} ms` },

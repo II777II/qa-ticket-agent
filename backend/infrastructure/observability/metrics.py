@@ -1,4 +1,4 @@
-"""进程内运营指标：token 消耗、首字延迟、总延迟、错误率、按天与按模型聚合。
+"""进程内运营指标：token、延迟、错误率、按天/模型/意图聚合。
 
 后台管理页的数据源。刻意保持零依赖、线程安全、可单测；
 记录的是「一轮对话」而不是每次 LLM 调用，因为用户关心的是「问一个问题要多久」。
@@ -30,6 +30,7 @@ def estimate_tokens(text: str) -> int:
 class TurnRecord:
     at: float
     model: str
+    intent: str
     tokens: int
     first_token_ms: int | None
     total_ms: int
@@ -51,12 +52,14 @@ class MetricsCollector:
         first_token_ms: int | None,
         total_ms: int,
         ok: bool,
+        intent: str = "unknown",
     ) -> None:
         with self._lock:
             self._turns.append(
                 TurnRecord(
                     at=time.time(),
                     model=model or "unknown",
+                    intent=intent or "unknown",
                     tokens=max(tokens, 0),
                     first_token_ms=first_token_ms,
                     total_ms=max(total_ms, 0),
@@ -96,6 +99,7 @@ class MetricsCollector:
             day_buckets[key] = {"date": key, "requests": 0, "tokens": 0, "latency_total": 0, "errors": 0}
 
         model_buckets: dict[str, dict[str, Any]] = {}
+        intent_buckets: dict[str, dict[str, Any]] = {}
         for turn in turns:
             day_key = datetime.fromtimestamp(turn.at).strftime("%m-%d")
             bucket = day_buckets.get(day_key)
@@ -112,6 +116,15 @@ class MetricsCollector:
             model["tokens"] += turn.tokens
             model["latency_total"] += turn.total_ms
             model["errors"] += 0 if turn.ok else 1
+
+            intent = intent_buckets.setdefault(
+                turn.intent,
+                {"intent": turn.intent, "calls": 0, "tokens": 0, "latency_total": 0, "errors": 0},
+            )
+            intent["calls"] += 1
+            intent["tokens"] += turn.tokens
+            intent["latency_total"] += turn.total_ms
+            intent["errors"] += 0 if turn.ok else 1
 
         by_day = [
             {
@@ -136,6 +149,23 @@ class MetricsCollector:
             key=lambda row: row["tokens"],
             reverse=True,
         )
+        by_intent = sorted(
+            (
+                {
+                    "intent": bucket["intent"],
+                    "calls": bucket["calls"],
+                    "tokens": bucket["tokens"],
+                    "avg_latency_ms": round(bucket["latency_total"] / bucket["calls"], 1)
+                    if bucket["calls"]
+                    else 0.0,
+                    "success_rate": round((1 - bucket["errors"] / bucket["calls"]) * 100, 2)
+                    if bucket["calls"]
+                    else 100.0,
+                }
+                for bucket in intent_buckets.values()
+            ),
+            key=lambda row: (-row["calls"], -row["tokens"]),
+        )
 
         return {
             "days": days,
@@ -150,4 +180,5 @@ class MetricsCollector:
             },
             "by_day": by_day,
             "by_model": by_model,
+            "by_intent": by_intent,
         }

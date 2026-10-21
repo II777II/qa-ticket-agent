@@ -7,11 +7,13 @@ import json
 
 import httpx
 import pytest
+from langchain_core.messages import ToolMessage
 
 from backend.api.app import app as api_app
 from backend.api.routes import agent as agent_routes
 from backend.api.routes import chat as chat_routes
 from backend.api.routes import dialogue as dialogue_routes
+from backend.application.chat.service import _tool_events
 from backend.application.runtime import AgentRuntime
 
 
@@ -142,6 +144,23 @@ def test_metrics_summary_after_one_turn(isolated_runtime: AgentRuntime) -> None:
     assert kpis["avg_first_token_ms"] >= 0
     assert len(summary["by_day"]) == 1
     assert summary["by_model"][0]["calls"] == 1
+    assert summary["by_intent"][0]["intent"] == "knowledge"
+
+
+def test_tool_order_result_emits_order_event() -> None:
+    tool_message = ToolMessage(
+        content=json.dumps(
+            {
+                "ok": True,
+                "orders": [{"order_no": "SO202609150020", "status": "待发货"}],
+            }
+        ),
+        name="query_order",
+        tool_call_id="call-order-result",
+    )
+    events = list(_tool_events({"query": {"messages": [tool_message]}}))
+    assert events[-1][0] == "order"
+    assert events[-1][1]["orders"][0]["order_no"] == "SO202609150020"
 
 
 def test_chat_sse_event_contract(isolated_runtime: AgentRuntime) -> None:

@@ -43,6 +43,41 @@ def test_by_model_sorted_by_tokens() -> None:
     assert rows[0]["success_rate"] == 100.0
 
 
+def test_by_intent_aggregates_calls_tokens_latency_and_success() -> None:
+    metrics = MetricsCollector()
+    metrics.record_turn(
+        model="mock",
+        intent="knowledge",
+        tokens=100,
+        first_token_ms=100,
+        total_ms=800,
+        ok=True,
+    )
+    metrics.record_turn(
+        model="mock",
+        intent="query",
+        tokens=50,
+        first_token_ms=50,
+        total_ms=200,
+        ok=True,
+    )
+    metrics.record_turn(
+        model="mock",
+        intent="knowledge",
+        tokens=200,
+        first_token_ms=300,
+        total_ms=1200,
+        ok=False,
+    )
+
+    rows = metrics.summary(days=1)["by_intent"]
+    assert [row["intent"] for row in rows] == ["knowledge", "query"]
+    assert rows[0]["calls"] == 2
+    assert rows[0]["tokens"] == 300
+    assert rows[0]["avg_latency_ms"] == 1000.0
+    assert rows[0]["success_rate"] == 50.0
+
+
 def test_reset_clears_records() -> None:
     metrics = MetricsCollector()
     metrics.record_turn(model="mock", tokens=1, first_token_ms=1, total_ms=1, ok=True)
