@@ -13,7 +13,6 @@ from backend.application.agent import build_graph
 from backend.application.agent.graph import route_by_intent
 from backend.application.agent.tools import create_tools
 from backend.application.orders import OrderService
-from backend.application.tickets import TicketService
 from backend.infrastructure.llm.mock import FakeChatModel
 from backend.infrastructure.persistence.factory import create_order_store
 from backend.infrastructure.persistence.json_store import JsonTicketStore
@@ -170,7 +169,7 @@ def test_service_node_emits_langgraph_custom_event(
 
 def test_logistics_branch_runs_agent_tool_loop(store: JsonTicketStore) -> None:
     orders = OrderService(create_order_store())
-    tools = create_tools(TicketService(store), orders, include_tickets=False)
+    tools = create_tools(orders)
     graph = build_graph(
         llm=FakeChatModel(),
         tools=tools,

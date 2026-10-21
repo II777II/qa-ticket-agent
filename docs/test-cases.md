@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（117 个，`backend/tests/`）——后端链路、订单/知识库数据、五路意图路由、物流 Agent/Tools、业务动作、custom 流、异常兜底、Langfuse、包契约、意图指标、检索、存储、工具、接口与整链；
+- **自动化用例**（108 个，`backend/tests/`）——后端链路、订单/知识库数据、五路意图路由、物流 Agent/Tools、业务动作、custom 流、异常兜底、Langfuse、包契约、意图指标、检索、存储、订单工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 117 passed in ~12s
+python -m pytest              # 108 passed in ~10s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -49,16 +49,10 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 
 | 编号 | 用例 | 步骤 | 预期 |
 | --- | --- | --- | --- |
-| T-01 | 工具注册与描述 | 创建工具集 | 恰好 3 个：create_ticket / query_ticket / escalate_to_human，描述非空 |
-| T-02 | 建单正常返回 | 传合法参数 | `ok=True`、单号形如 `TK-`、状态「待受理」、存储新增 1 张 |
-| T-03 | 非法分类被拒 | category 传「服务器坏了」 | 抛 `ValidationError`，**存储里没有新单** |
-| T-04 | 描述过短被拒 | description = 「坏了」 | 抛 `ValidationError` |
-| T-05 | 按单号查询 | 建单后查询 | 返回该工单 |
-| T-06 | 催单记时间线 | `urge=true` | 时间线出现「用户催单」 |
-| T-07 | 无参数查询 | 不传单号与联系人 | `ok=False`，提示需要单号或联系人 |
-| T-08 | 查询不存在的单 | 传假单号 | `ok=False`，提示「没有找到工单」 |
-| T-09 | 转人工改状态 | 传真实单号 | 状态变「处理中」，时间线最后一条是「转人工」 |
-| T-10 | 转人工不存在的单 | 传假单号 | `ok=False`，提示先建单 |
+| T-01 | 工具注册与描述 | 创建工具集 | 恰好 1 个：query_order，描述非空 |
+| T-02 | 按订单号查询 | 传有效订单号 | 返回对应订单摘要 |
+| T-03 | 按姓名查询 | keyword=张三 | 返回张三的订单 |
+| T-04 | 查不到订单 | 传不存在关键词 | `ok=False`，提示订单号/姓名/手机号 |
 
 ## 四、编排（`test_graph.py`）
 
@@ -157,7 +151,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | 业务办理草稿与用户确认 | G-06、A-07/A-12/A-13/A-14、E-02、M-02/M-20 |
 | 记忆与编排、异常降级 | G-03/G-08/G-09、E-03、A-11 |
 | 知识库检索准确性 | R-01~R-09、G-04/G-05、A-06 |
-| 工具参数校验防幻觉建单 | T-03/T-04、S-02 |
+| 只读订单工具与业务确认隔离 | T-01~T-04、A-13、S-02 |
 | POC 可演示、可部署 | A-01~A-11、E-01~E-05、M-07/M-09/M-10/M-11 |
 
 权限（RBAC）、Redis、异步任务、监控属于生产化范围，POC 不含对应用例，只保证接口与扩展点预留。

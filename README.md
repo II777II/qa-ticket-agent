@@ -17,7 +17,7 @@
 | 编排 | LangGraph StateGraph + StreamWriter custom（预处理 + 意图分类 + 五路分支） | 已就绪；logistics 使用 Agent/Tools |
 | 模型 | 直连 DeepSeek / OpenAI 兼容，抽象成 `BaseChatModel` | 已就绪（含 mock 演示模式） |
 | 短期记忆 | `MemorySaver`，`thread_id` 隔离 | 已就绪 |
-| 工具调用 | 对话暴露 `query_order`（订单查询）；工单工具保留在代码中但不再暴露 | 已就绪 |
+| 工具调用 | 只暴露 `query_order` 订单查询工具 | 已就绪 |
 | 简易 RAG | 进程内检索 + 50 篇电商 HTML + 引用 | 已就绪（HTML 按 h2 切块） |
 | 订单查询 | JSON 演示数据（50 单，按 Postgres 表形状） | 已就绪（`#/orders`） |
 | 知识库 | 50 篇 HTML 文章 + 分类/标签目录 | 已就绪（`#/kb`） |
@@ -161,7 +161,7 @@ SSE 生成器会在普通异常或 payload 序列化失败时记录日志，并�
 ## 测试
 
 ```powershell
-python -m pytest            # 117 个用例，约 12 秒
+python -m pytest            # 108 个用例，约 10 秒
 python -m pytest -v         # 看每个用例名
 ```
 
@@ -238,9 +238,8 @@ backend/
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
     deps.py            依赖取用点（从 app.state 取运行时与用例）
     streaming.py       SSE 响应封装（/chat 与 /branch/* 共用）
-    routes/            dialogue.py / chat.py / agent.py / orders.py / knowledge.py
-                       metrics.py / system.py
-                       tickets.py（能力保留，当前未挂载）
+    routes/            dialogue.py / chat.py / branches.py / service.py
+                       orders.py / knowledge.py / metrics.py / system.py
     schemas.py         请求响应模型与 SSE 编码
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）

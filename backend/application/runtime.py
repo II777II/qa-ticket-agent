@@ -84,8 +84,8 @@ def create_runtime() -> AgentRuntime:
     tracing = create_langfuse_tracing()
     orders = OrderService(create_order_store())
     knowledge = KnowledgeService(create_knowledge_catalog())
-    # 对话侧只暴露订单查询；售后工单不再进入 Agent（代码保留，可通过 include_tickets=True 恢复）
-    tools = create_tools(tickets, orders, include_tickets=False)
+    # Agent 只暴露只读订单工具；工单写入由确认接口的业务用例负责
+    tools = create_tools(orders)
     retriever = create_retriever()
 
     graph = build_graph(

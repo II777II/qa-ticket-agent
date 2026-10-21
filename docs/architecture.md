@@ -79,26 +79,15 @@ flowchart TD
 
 ## 工具是什么
 
-工具就是**普通 Python 函数**，只是用 `@tool` 装饰并声明了参数 schema：模型在对话里决定调不调、调哪个，
-LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回到模型。三个工具都在
-`backend/application/agent/tools.py`，由 `create_tools(tickets)` 按工单用例创建。
+工具就是**普通 Python 函数**，只是用 `@tool` 装饰并声明了参数 schema。当前只保留一个
+只读订单工具，由 `create_tools(orders)` 创建；物流试点通过 `ToolNode` 执行并返回 `ToolMessage`。
 
 | 工具 | 作用 | 关键参数 | 什么时候会被调用 | 返回 |
 | --- | --- | --- | --- | --- |
-| `create_ticket` | 创建售后工单 | `title` / `description` / `category`（7 类电商分类）/ `priority`（4 档枚举）/ `contact` | 帮助中心解决不了、或用户明确要求建单 | `{ok, duplicated, ticket}` |
-| `query_ticket` | 查进度、催单 | `ticket_id` / `contact` / `urge` | 用户问「处理到哪了」「催一下」「我的工单」 | `{ok, tickets[], message}` |
-| `escalate_to_human` | 转人工 | `ticket_id` / `reason` | 用户要求转人工、或超出能力范围 | `{ok, ticket}` |
 | `query_order` | 查订单 | `order_no` / `keyword`（姓名/手机号/商品）/ `status` | 用户问「我的订单/订单进度/订单号」，命中 `order_lookup` 意图 | `{ok, orders[], message}` |
 
-> 当前运行时只向 Agent 暴露 `query_order`（`create_tools(..., include_tickets=False)`）；
-> 三个工单工具保留在代码与单测里，供后续产品需要时恢复。
-
-三个工具共同的设计：
-
-- **参数用 Pydantic 约束**：分类与优先级是 `Literal` 枚举，会变成工具参数 JSON Schema 里的 `enum`，模型编不出「服务器坏了」这种值；
-- **校验失败交给模型自纠**：不合法参数抛 `ValidationError`，`ToolNode` 默认把错误转成 `ToolMessage` 回给模型让它改参数重试，而不是整轮失败；
-- **返回值统一是 JSON 字符串**：模型读得懂，`runtime.py` 也能解析出工单号推给前端；`ok=False` 时由模型组织成人话，不把原始 JSON 念给用户；
-- **写操作有幂等兜底**：同一联系人 + 同标题 + 未关闭的重复建单，存储层直接返回已有工单。
+工具返回统一 JSON 字符串。售后业务写入不走模型工具，只允许用户在右侧面板确认后调用
+`service-actions`。
 
 订单查询是**只读工具**：`order_lookup` 意图会跳过 RAG（避免把「订单」当成知识问题），
 直接调用 `query_order` 查 `OrderService`；查不到时让用户补订单号，不创建售后工单。

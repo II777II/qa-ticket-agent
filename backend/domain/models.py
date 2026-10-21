@@ -1,7 +1,6 @@
 """工单领域实体（纯数据，不含存取逻辑）。
 
-`TicketCreate` 同时充当 `create_ticket` 工具的参数 schema，字段 description 会进模型上下文，
-所以这里的措辞是「给模型看的」，调整时要连带想清楚模型会怎么理解。
+`TicketCreate` 是用户确认后提交售后业务时使用的领域输入模型。
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ class TicketEvent(BaseModel):
 
 
 class TicketCreate(BaseModel):
-    """建单入参（也是工具参数 schema）。"""
+    """售后业务提交入参。"""
 
     title: str = Field(
         min_length=4,

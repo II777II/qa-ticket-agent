@@ -68,7 +68,7 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     store = JsonTicketStore(store_path)
     tickets = TicketService(store)
     orders_service = OrderService(create_order_store())
-    tools = create_tools(tickets, orders_service, include_tickets=False)
+    tools = create_tools(orders_service)
     retriever = InMemoryRetriever(docs_dir=settings.kb_dir, top_k=settings.rag_top_k)
     checkpointer = InMemorySaver()
     graph = build_graph(
