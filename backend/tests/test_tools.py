@@ -8,7 +8,7 @@ from langchain_core.tools import BaseTool
 
 from backend.application.agent.tools import create_tools
 from backend.application.orders import OrderService
-from backend.infrastructure.persistence.factory import create_order_store
+from backend.infrastructure.persistence import create_order_store
 
 
 def _orders() -> OrderService:

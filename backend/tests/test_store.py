@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 
 from backend.domain import TicketCreate, UnknownStatusError
-from backend.infrastructure.persistence.json_store import JsonTicketStore
+from backend.infrastructure.persistence import JsonTicketStore
 
 
 def test_create_assigns_daily_sequence_id(store: JsonTicketStore, sample_ticket: TicketCreate) -> None:

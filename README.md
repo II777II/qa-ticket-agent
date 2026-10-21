@@ -230,7 +230,7 @@ backend/
     llm/               模型工厂 + 演示模式假模型
     memory/            短期记忆（checkpointer）工厂
     retrieval/         进程内检索（切块 + 关键词命中打分 + 拼参考资料）
-    persistence/       工单/订单 JSON 存储、知识库目录与工厂
+    persistence/       store.py：工单/订单 JSON 存储、知识库目录与工厂
     observability/     进程内指标 + 可选 Langfuse tracing
   api/                 接口层
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）

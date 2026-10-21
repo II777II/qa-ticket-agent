@@ -29,7 +29,7 @@ os.environ["LANGFUSE_ENABLED"] = "false"
 
 from backend.application.runtime import AgentRuntime, create_runtime  # noqa: E402
 from backend.domain import TicketCreate  # noqa: E402
-from backend.infrastructure.persistence.json_store import JsonTicketStore  # noqa: E402
+from backend.infrastructure.persistence import JsonTicketStore  # noqa: E402
 from backend.infrastructure.retrieval.in_memory import InMemoryRetriever  # noqa: E402
 
 
@@ -62,7 +62,7 @@ def build_isolated_runtime(store_path: Path) -> AgentRuntime:
     from backend.infrastructure.config import settings
     from backend.infrastructure.llm.mock import FakeChatModel
     from backend.infrastructure.observability import MetricsCollector
-    from backend.infrastructure.persistence.factory import create_knowledge_catalog, create_order_store
+    from backend.infrastructure.persistence import create_knowledge_catalog, create_order_store
 
     llm = FakeChatModel()
     store = JsonTicketStore(store_path)

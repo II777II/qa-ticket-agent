@@ -26,8 +26,11 @@ from backend.infrastructure.observability import (
     MetricsCollector,
     create_langfuse_tracing,
 )
-from backend.infrastructure.persistence import create_ticket_store
-from backend.infrastructure.persistence.factory import create_knowledge_catalog, create_order_store
+from backend.infrastructure.persistence import (
+    create_knowledge_catalog,
+    create_order_store,
+    create_ticket_store,
+)
 from backend.infrastructure.retrieval import create_retriever
 
 logger = logging.getLogger("qa_ticket.runtime")

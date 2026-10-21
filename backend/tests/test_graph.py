@@ -14,8 +14,7 @@ from backend.application.agent.graph import route_by_intent
 from backend.application.agent.tools import create_tools
 from backend.application.orders import OrderService
 from backend.infrastructure.llm.mock import FakeChatModel
-from backend.infrastructure.persistence.factory import create_order_store
-from backend.infrastructure.persistence.json_store import JsonTicketStore
+from backend.infrastructure.persistence import JsonTicketStore, create_order_store
 from backend.infrastructure.retrieval.in_memory import InMemoryRetriever
 
 
