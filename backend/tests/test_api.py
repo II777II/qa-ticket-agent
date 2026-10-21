@@ -8,9 +8,11 @@ import json
 import httpx
 import pytest
 
+import backend.api.core as api_core
 from backend.api.app import app as api_app
 from backend.api.core import router
 from backend.application.core import AgentRuntime
+from backend.infrastructure.core import FakeChatModel
 
 
 def _client() -> httpx.AsyncClient:
@@ -76,6 +78,29 @@ def test_agent_info_reports_capabilities(isolated_runtime: AgentRuntime) -> None
     assert "compose:docker/docker-compose.yml" in body["extensions"]
     assert body["tickets"] == 0
     assert body["git_sha"]  # 界面要显示版本号
+
+
+def test_llm_configuration_keeps_key_in_memory(
+    isolated_runtime: AgentRuntime,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured = {}
+
+    def fake_create_llm(**kwargs):
+        captured.update(kwargs)
+        return FakeChatModel()
+
+    monkeypatch.setattr(api_core, "create_llm", fake_create_llm)
+    _prepare(isolated_runtime)
+    response = asyncio.run(_post_json(
+        "/api/llm/config",
+        {"provider": "deepseek", "api_key": "secret-test-key", "model": "custom-model"},
+    ))
+    assert response.status_code == 200
+    assert captured["api_key"] == "secret-test-key"
+    assert "secret-test-key" not in response.text
+    assert isolated_runtime.provider == "deepseek"
+    assert isolated_runtime.model == "custom-model"
 
 
 def test_root_returns_html_or_json(isolated_runtime: AgentRuntime) -> None:

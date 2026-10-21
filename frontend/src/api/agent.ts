@@ -10,6 +10,8 @@ import type {
   KnowledgeArticle,
   KnowledgeCategory,
   KnowledgeHit,
+  LlmConfigPayload,
+  LlmConfigResult,
   MetricsSummary,
   IntentEvent,
   OrderRecord,
@@ -43,6 +45,13 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getAgentInfo(): Promise<AgentInfo> {
   return requestJson<AgentInfo>("/api/agent-info");
+}
+
+export function configureLlm(payload: LlmConfigPayload): Promise<LlmConfigResult> {
+  return requestJson<LlmConfigResult>("/api/llm/config", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function searchKnowledge(query: string, topK = 5): Promise<KnowledgeHit[]> {

@@ -79,6 +79,19 @@ export interface AgentInfo {
   git_date: string;
 }
 
+export interface LlmConfigPayload {
+  provider: "mock" | "deepseek" | "openai";
+  api_key?: string;
+  model?: string;
+  base_url?: string;
+}
+
+export interface LlmConfigResult {
+  provider: string;
+  mock: boolean;
+  model: string;
+}
+
 export interface ChatMessage {
   key: string;
   role: Role;

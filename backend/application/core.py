@@ -18,7 +18,7 @@ from backend.domain.core import (
     extract_service_slots, guess_category, is_order_query, rule_classify,
 )
 from backend.infrastructure.core import (
-    LangfuseTracing, MetricsCollector, create_checkpointer, create_knowledge_catalog,
+    LLM_MODELS, LangfuseTracing, MetricsCollector, create_checkpointer, create_knowledge_catalog,
     create_langfuse_tracing, create_llm, create_order_store, create_retriever,
     create_ticket_store, estimate_tokens, format_context, message_text, settings,
 )
@@ -51,7 +51,7 @@ def _emit(writer: StreamWriter, event: str, data: dict[str, Any]) -> None:
 
 
 def _intent(question: str, llm: BaseChatModel) -> IntentResult:
-    if settings.mock_mode:
+    if getattr(llm, "_llm_type", "") == "fake-chat-model":
         return rule_classify(question)
     try:
         result = llm.with_structured_output(IntentResult).invoke(
@@ -201,7 +201,8 @@ class ChatService:
         }
         if self._runtime.tracing and self._runtime.tracing.handler:
             config["callbacks"] = [self._runtime.tracing.handler]
-        yield EVENT_START, {"thread_id": thread_id, "provider": settings.llm_provider, "mock": settings.mock_mode}
+        provider = getattr(self._runtime, "provider", "") or settings.llm_provider
+        yield EVENT_START, {"thread_id": thread_id, "provider": provider, "mock": provider == "mock"}
         started, first_at, answer, final_text, tokens = time.perf_counter(), None, [], "", 0
         ok, intent = True, requested_intent or "unknown"
         try:
@@ -259,10 +260,14 @@ class AgentRuntime:
     checkpointer: Any | None = None
     store: Any | None = None
     tracing: LangfuseTracing | None = None
+    provider: str = ""
+    model: str = ""
 
     def describe(self) -> dict[str, Any]:
         return {
-            "provider": settings.llm_provider, "mock": settings.mock_mode, "model": settings.llm_model,
+            "provider": self.provider or settings.llm_provider,
+            "mock": (self.provider or settings.llm_provider) == "mock",
+            "model": self.model or settings.llm_model,
             "tickets": self.tickets.count(), "orders": self.orders.count(), "kb_articles": self.knowledge.count(),
             "kb_documents": getattr(self.retriever, "document_count", lambda: 0)(),
             "kb_chunks": getattr(self.retriever, "chunk_count", lambda: 0)(),
@@ -275,6 +280,12 @@ class AgentRuntime:
     def shutdown(self) -> None:
         self.tracing and self.tracing.shutdown()
 
+    def configure_llm(self, llm: Any, provider: str, model: str) -> None:
+        self.llm, self.provider, self.model = llm, provider, model
+        self.graph = build_graph(
+            llm=llm, retriever=self.retriever, checkpointer=self.checkpointer, order_service=self.orders,
+        )
+
 
 def create_runtime() -> AgentRuntime:
     llm, checkpointer = create_llm(), create_checkpointer()
@@ -284,4 +295,5 @@ def create_runtime() -> AgentRuntime:
     return AgentRuntime(
         graph=graph, llm=llm, tickets=store, metrics=MetricsCollector(), orders=orders,
         knowledge=knowledge, retriever=retriever, checkpointer=checkpointer, store=store, tracing=tracing,
+        provider=settings.llm_provider, model=settings.llm_model or LLM_MODELS.get(settings.llm_provider, "mock"),
     )

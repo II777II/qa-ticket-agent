@@ -43,6 +43,7 @@ DEMO_DIR = BACKEND_DIR / "data" / "demo" / "ecommerce"
 load_dotenv(PROJECT_ROOT / ".env")
 CONTEXT_HEADER = "【参考资料】"
 CONTEXT_FOOTER = "【参考资料结束】"
+LLM_MODELS = {"deepseek": "deepseek-chat", "openai": "gpt-4o-mini"}
 
 
 def _env(name: str, default: str = "") -> str:
@@ -373,21 +374,22 @@ class FakeChatModel(BaseChatModel):
             yield ChatGenerationChunk(message=AIMessageChunk(content=answer[i:i + 8]))
 
 
-def create_llm() -> BaseChatModel:
-    provider = settings.llm_provider
+def create_llm(*, provider: str | None = None, api_key: str | None = None,
+               model: str = "", base_url: str = "") -> BaseChatModel:
+    provider = (provider or settings.llm_provider).lower()
     if provider == "mock":
         return FakeChatModel()
-    models = {"deepseek": "deepseek-chat", "openai": "gpt-4o-mini"}
-    if provider not in models:
+    if provider not in LLM_MODELS:
         raise ValueError(f"未知的 LLM_PROVIDER: {provider!r}")
-    if not settings.llm_api_key:
+    key = api_key or settings.llm_api_key
+    if not key:
         raise RuntimeError(f"LLM_PROVIDER={provider} 需要配置 LLM_API_KEY")
     from langchain_openai import ChatOpenAI
     kwargs = {
-        "model": settings.llm_model or models[provider], "api_key": settings.llm_api_key,
+        "model": model or settings.llm_model or LLM_MODELS[provider], "api_key": key,
         "temperature": settings.llm_temperature, "timeout": settings.llm_timeout, "streaming": True,
     }
-    if url := settings.llm_base_url or ("https://api.deepseek.com/v1" if provider == "deepseek" else ""):
+    if url := base_url or settings.llm_base_url or ("https://api.deepseek.com/v1" if provider == "deepseek" else ""):
         kwargs["base_url"] = url
     return ChatOpenAI(**kwargs)
 

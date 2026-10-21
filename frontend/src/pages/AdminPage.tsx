@@ -17,7 +17,13 @@ function formatNumber(value: number): string {
 }
 
 /** 第 5 屏：后台管理（运营概览）。 */
-export default function AdminPage({ info }: { info: AgentInfo | null }) {
+export default function AdminPage({
+  info,
+  onOpenLlmSettings,
+}: {
+  info: AgentInfo | null;
+  onOpenLlmSettings: () => void;
+}) {
   const [metrics, setMetrics] = useState<MetricsSummary | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -54,8 +60,9 @@ export default function AdminPage({ info }: { info: AgentInfo | null }) {
               key={item}
               type="button"
               className={index === 0 ? "nav-item active" : "nav-item"}
-              title={index === 0 ? "" : "POC 暂未实现"}
-              disabled={index !== 0}
+              title={index > 1 ? "POC 暂未实现" : ""}
+              disabled={index > 1}
+              onClick={item === "模型配置" ? onOpenLlmSettings : undefined}
             >
               {item}
             </button>

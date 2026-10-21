@@ -98,12 +98,17 @@ main app
     ├── POST /branch/read
     ├── POST /branch/write
     ├── POST /branch/human
-    └── POST /branch/service/confirm
+    ├── POST /branch/service/confirm
+    └── POST /api/llm/config
 ```
 
 `app.py` 只暴露 `api/core.py` 中的应用实例。`/branch/*`
 SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确认后的业务写操作，
 标记为 `service-actions`，不再混入 Agent 或意图分支分组。
+
+模型 API Key 通过前端右下角设置窗口提交到 `/api/llm/config`。后端先创建模型并发起最小
+验证调用，成功后重建 LangGraph；Key 只存在于当前进程内存，不写入 `.env`、浏览器存储或日志。
+该模式是单实例 POC 配置，多用户生产环境应改为用户级密钥托管或服务端集中网关。
 
 前端页面：`#/`（首页对话框）、`#/chat`（会话记录）、`?panel=knowledge`（知识库结果）、
 `?panel=orders`（本轮订单）、`?panel=service`（业务办理）、`#/orders`、`#/kb`、`#/admin`。前端结构：`pages/`（页面）→

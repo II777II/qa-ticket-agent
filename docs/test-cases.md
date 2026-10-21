@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（86 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
+- **自动化用例**（87 个，`backend/tests/`）——后端链路、read/write/human 三类意图、read 确定性工具分流、业务动作、custom 流、异常兜底、Langfuse、事件契约、指标、检索、存储、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 86 passed in ~3s
+python -m pytest              # 87 passed in ~3s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -81,6 +81,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | A-17 | SSE 序列化异常 | 事件 payload 含不可 JSON 序列化对象 | 转成 `error` 事件，连接不抛未处理异常 |
 | A-19 | 意图指标 | 完成一轮知识问答后读取指标 | `by_intent` 含 read，统计 calls/tokens/延迟/成功率 |
 | A-20 | OpenAPI 语义分组 | 检查三路 SSE 与业务确认 tags | 分支统一为 intent-branches，确认接口为 service-actions |
+| A-21 | API Key 配置 | 提交模拟模型 Key | 验证成功、运行时不回显 Key、模型信息更新 |
 
 ## 五、整链（`test_chat_flow.py`）
 

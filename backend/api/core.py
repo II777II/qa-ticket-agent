@@ -2,21 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from typing import AsyncIterator, Literal
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import EventSourceResponse, FileResponse
 from fastapi.sse import ServerSentEvent
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from backend.application.core import AgentRuntime, ChatService, create_runtime
 from backend.domain.core import ServiceType, TicketCategory, TicketCreate, TicketPriority
-from backend.infrastructure.core import git_version, settings, setup_logging
+from backend.infrastructure.core import LLM_MODELS, create_llm, git_version, settings, setup_logging
 
 logger = logging.getLogger("qa_ticket.api")
 router = APIRouter()
@@ -34,6 +35,13 @@ class ServiceConfirmRequest(BaseModel):
     category: TicketCategory
     priority: TicketPriority = "中"
     description: str = Field(min_length=10, max_length=2000)
+
+
+class LlmConfigRequest(BaseModel):
+    provider: Literal["mock", "deepseek", "openai"]
+    api_key: SecretStr | None = None
+    model: str = Field(default="", max_length=120)
+    base_url: str = Field(default="", max_length=300)
 
 
 def get_runtime(request: Request) -> AgentRuntime:
@@ -96,6 +104,21 @@ async def agent_info(runtime: AgentRuntime = Depends(get_runtime)):
         "status": "ok", "rag_top_k": settings.rag_top_k, "git_sha": version["sha"],
         "git_date": version["date"], "extensions": ["compose:docker/docker-compose.yml"],
     }
+
+
+@router.post("/api/llm/config", tags=["system"])
+async def configure_llm(req: LlmConfigRequest, runtime: AgentRuntime = Depends(get_runtime)):
+    provider, model = req.provider, req.model.strip()
+    key = req.api_key.get_secret_value().strip() if req.api_key else ""
+    try:
+        llm = create_llm(provider=provider, api_key=key, model=model, base_url=req.base_url.strip())
+        if provider != "mock":
+            await asyncio.to_thread(llm.invoke, "只回复 OK")
+    except Exception as exc:
+        logger.warning("LLM 配置验证失败: %s", type(exc).__name__)
+        raise HTTPException(status_code=400, detail="API Key 验证失败或模型不可用") from None
+    runtime.configure_llm(llm, provider, model or LLM_MODELS.get(provider, "mock"))
+    return runtime.describe()
 
 
 @router.get("/api/orders", tags=["orders"])

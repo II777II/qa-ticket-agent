@@ -1273,6 +1273,14 @@ button.cite {
   font-size: 12px;
 }
 
+.llm-settings-trigger {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 900;
+  box-shadow: 0 8px 24px rgba(22, 119, 255, 0.28);
+}
+
 @media (max-width: 1180px) {
   .side-panel {
     width: 340px;
