@@ -231,6 +231,7 @@ backend/
     memory/            短期记忆（checkpointer）工厂
     retrieval/         进程内检索（切块 + 关键词命中打分 + 拼参考资料）
     persistence/       store.py：工单/订单 JSON 存储、知识库目录与工厂
+    llm/ memory/ retrieval/  各包的 __init__.py 集成实现与工厂
     observability/     进程内指标 + 可选 Langfuse tracing
   api/                 接口层
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
@@ -296,7 +297,7 @@ app
 | `MemorySaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 进程内检索 | pgvector / Qdrant | `.env: RETRIEVER=pgvector` |
 | JSON 工单文件 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
-| 直连模型 | LiteLLM 网关 | `infrastructure/llm/factory.py` 加一个分支 |
+| 直连模型 | LiteLLM 网关 | `infrastructure/llm/__init__.py` 加一个分支 |
 | ~~`logging.basicConfig`~~ | 已落地：手写 `Handler` + 判断注册 | `infrastructure/logging.py` |
 | 单进程 | Docker Compose | 打开 `docker/docker-compose.yml` 注释块 |
 

@@ -101,7 +101,7 @@ flowchart TD
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `app.py` 组装、`routes/`（dialogue / service / resources / system）、`schemas.py` | 不改 |
 | 接口层（数据接口） | `backend/api/routes/resources.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
-| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/graph.py` 编排；`chat/service.py` 对话用例；`contracts/chat_events.py` 共享事件；`tickets` / `orders` / `knowledge` 业务用例 | 加用例不改图 |
+| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/graph.py` 编排；`chat/service.py` 对话用例；`contracts/__init__.py` 共享事件；`tickets` / `orders` / `knowledge` 业务用例 | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 分类/优先级/去重/单号规则 | 不改 |
 | 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/store.py`、`observability/`、`version.py` | 只加一个分支 |
 
@@ -188,14 +188,14 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 便于对比两种写法。
 
 `EVENT_*` 属于跨 Agent、Chat、API 与 CLI 的共享契约，统一放在
-`application/contracts/chat_events.py`。`application/chat` 包的公开门面只导出
+`application/contracts/__init__.py`。`application/chat` 包的公开门面只导出
 `ChatService`，不再承担契约分发职责，避免共享事件被误认为 chat 私有实现。
 
 ## 四个扩展点与生产替换
 
 | 扩展点 | POC 实现 | 抽象接口 | 生产替换 | 怎么换 |
 | --- | --- | --- | --- | --- |
-| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/llm/factory.py` 加分支 |
+| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/llm/__init__.py` 加分支 |
 | 记忆 | `InMemorySaver`（进程内存） | `BaseCheckpointSaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 检索 | 关键词命中 + 标题加权 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |

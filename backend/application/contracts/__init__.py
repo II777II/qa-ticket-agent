@@ -1,16 +1,14 @@
-"""应用层共享契约：跨 Agent、Chat 与接口适配器的事件名称。"""
+"""对话事件契约：跨 Agent、Chat、API 与 CLI 的稳定事件名。"""
 
-from backend.application.contracts.chat_events import (
-    EVENT_CITATION,
-    EVENT_DONE,
-    EVENT_ERROR,
-    EVENT_INTENT,
-    EVENT_ORDER,
-    EVENT_SERVICE_DRAFT,
-    EVENT_START,
-    EVENT_TOKEN,
-    EVENT_TOOL,
-)
+EVENT_START = "start"
+EVENT_INTENT = "intent"
+EVENT_TOKEN = "token"
+EVENT_TOOL = "tool"
+EVENT_ORDER = "order"
+EVENT_SERVICE_DRAFT = "service_draft"
+EVENT_CITATION = "citation"
+EVENT_DONE = "done"
+EVENT_ERROR = "error"
 
 __all__ = [
     "EVENT_CITATION",
