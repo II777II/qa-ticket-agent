@@ -68,7 +68,6 @@ class Settings:
     rag_top_k: int = _int("RAG_TOP_K", 3)
 
     data_dir: Path = field(default_factory=lambda: _path("DATA_DIR", BACKEND_DIR / "data"))
-    demo_data_dir: Path = field(default_factory=lambda: _path("DEMO_DATA_DIR", DEMO_DIR))
     orders_file: Path = field(default_factory=lambda: _path("ORDERS_FILE", DEMO_DIR / "orders.json"))
     kb_root: Path = field(default_factory=lambda: _path("KB_ROOT", DEMO_DIR / "kb"))
     kb_dir: Path = field(default_factory=lambda: _path("KB_DIR", DEMO_DIR / "kb" / "pages"))

@@ -73,3 +73,12 @@ def test_empty_dir_degrades_to_no_chunks(tmp_path: Path) -> None:
     empty = InMemoryRetriever(docs_dir=tmp_path, top_k=3)
     assert empty.chunk_count() == 0
     assert empty.invoke("VPN 连不上") == []
+
+
+def test_non_html_files_are_ignored(tmp_path: Path) -> None:
+    """当前知识库契约只有 HTML，Markdown/TXT 不应混入索引。"""
+    from backend.infrastructure.retrieval.in_memory import InMemoryRetriever
+
+    (tmp_path / "legacy.md").write_text("## 退款多久到账\n旧格式", encoding="utf-8")
+    (tmp_path / "legacy.txt").write_text("旧格式", encoding="utf-8")
+    assert InMemoryRetriever(docs_dir=tmp_path, top_k=3).chunk_count() == 0

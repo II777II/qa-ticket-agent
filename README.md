@@ -183,7 +183,7 @@ PNG 先试 mermaid.ink，失败就用本机 Chrome/Edge 离线渲染并裁掉空
 知识库是 `backend/data/demo/ecommerce/kb/pages/` 下的 50 篇电商帮助中心 HTML 页面
 （下单支付、配送物流、退换售后、发票、会员、账户、商品、商家规则），
 `articles.json` 是文章索引与分类，`index.html` 是可直接浏览的目录页。
-检索器同时支持 `.md`、`.txt` 与 `.html`，HTML 按 `<h2>` 切块、去标签后参与打分。
+检索器只索引 HTML 页面，按 `<h2>` 切块、去标签后参与打分。
 
 电商订单与知识库数据由固定种子的生成器产出：
 
@@ -196,7 +196,7 @@ python -m backend.scripts.generate_ecommerce_demo
 
 检索实现（[backend/infrastructure/retrieval/in_memory.py](backend/infrastructure/retrieval/in_memory.py)）刻意做成零依赖、可解释：
 
-1. Markdown 按 `##` 切小节；HTML 按 `<h2>` 切块并去掉标签；
+1. HTML 按 `<h2>` 切块并去掉标签，忽略 `index.html` 和其他文件格式；
 2. 查询与片段都按「英文单词 + 中文二元组」切词；
 3. 用查询词与片段的关键词命中数打分，标题命中额外加权，取 `RAG_TOP_K`（默认 3）条；
 4. 至少命中 1 个有效查询词才视为召回；否则不注入资料。

@@ -47,7 +47,7 @@ class CitationPayload(BaseModel):
     """citation 事件的载荷：模型这句回答的依据来自哪篇文档的哪一小节。"""
 
     index: int = Field(description="回答里的标注编号，如 [1]")
-    source: str = Field(description="文件名，如 vpn-691.md")
+    source: str = Field(description="文件名，如 KB-EC-0020.html")
     title: str = Field(description="小节标题")
     snippet: str = Field(default="", description="命中片段前 160 字，供前端悬浮展示")
     score: float | None = Field(default=None, description="检索打分，调参时看它")

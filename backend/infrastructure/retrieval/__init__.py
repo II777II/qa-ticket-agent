@@ -8,10 +8,7 @@ from langchain_core.retrievers import BaseRetriever
 
 from backend.infrastructure.config import settings
 from backend.infrastructure.retrieval.in_memory import (
-    CONTEXT_FOOTER,
-    CONTEXT_HEADER,
     InMemoryRetriever,
-    format_context,
 )
 
 
@@ -32,8 +29,4 @@ def create_retriever() -> BaseRetriever | None:
 
 __all__ = [
     "create_retriever",
-    "InMemoryRetriever",
-    "format_context",
-    "CONTEXT_HEADER",
-    "CONTEXT_FOOTER",
 ]

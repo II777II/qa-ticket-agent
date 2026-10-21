@@ -15,7 +15,6 @@ from pydantic import Field, PrivateAttr
 
 CONTEXT_HEADER = "【参考资料】"
 CONTEXT_FOOTER = "【参考资料结束】"
-SUPPORTED_SUFFIXES = {".md", ".txt", ".html"}
 LATIN_WORD = re.compile(r"[a-zA-Z0-9_]{2,}")
 CJK = re.compile(r"[\u4e00-\u9fff]")
 STOP_WORDS = {
@@ -34,16 +33,12 @@ STOP_WORDS = {
 
 def _tokens(text: str) -> set[str]:
     lowered = text.lower()
-    result = {word for word in LATIN_WORD.findall(lowered) if word not in STOP_WORDS}
+    result = set(LATIN_WORD.findall(lowered))
     chars = "".join(CJK.findall(lowered))
-    result.update(
-        token
-        for token in (chars[index : index + 2] for index in range(max(len(chars) - 1, 0)))
-        if token not in STOP_WORDS
-    )
+    result.update(chars[index : index + 2] for index in range(max(len(chars) - 1, 0)))
     if len(chars) == 1:
         result.add(chars)
-    return result
+    return result - STOP_WORDS
 
 
 def _html_text(fragment: str) -> str:
@@ -56,15 +51,6 @@ def _html_text(fragment: str) -> str:
 
 def _split_sections(path: Path) -> list[tuple[str, str]]:
     raw = path.read_text(encoding="utf-8")
-    if path.suffix.lower() != ".html":
-        title = path.stem
-        blocks = [block.strip() for block in re.split(r"(?m)^##\s+", raw) if block.strip()]
-        if len(blocks) == 1:
-            return [(title, _html_text(blocks[0]))]
-        return [
-            (f"{title} · {block.splitlines()[0].strip()}", _html_text(block)) for block in blocks[1:]
-        ]
-
     title_match = re.search(r"<title>(.*?)</title>", raw, flags=re.S | re.I)
     title = unescape(title_match.group(1)).split(" - ")[0].strip() if title_match else path.stem
     parts = re.split(r"(?is)<h2[^>]*>(.*?)</h2>", raw)
@@ -101,12 +87,8 @@ class InMemoryRetriever(BaseRetriever):
     def model_post_init(self, __context: Any) -> None:
         if not self.docs_dir.exists():
             return
-        for path in sorted(self.docs_dir.rglob("*")):
-            if (
-                not path.is_file()
-                or path.suffix.lower() not in SUPPORTED_SUFFIXES
-                or path.name.lower() in {"readme.md", "index.html"}
-            ):
+        for path in sorted(self.docs_dir.glob("*.html")):
+            if path.name.lower() == "index.html":
                 continue
             for title, text in _split_sections(path):
                 self._chunks.append(
@@ -118,10 +100,6 @@ class InMemoryRetriever(BaseRetriever):
                         _tokens(title),
                     )
                 )
-
-    @property
-    def chunks(self) -> list[_Chunk]:
-        return self._chunks
 
     def document_count(self) -> int:
         return len({chunk.source for chunk in self._chunks})

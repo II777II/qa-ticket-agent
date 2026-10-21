@@ -8,6 +8,7 @@ import os
 import threading
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from backend.domain.knowledge import KnowledgeArticle, KnowledgeCategory
 from backend.domain.models import TicketCreate, TicketRecord
@@ -22,6 +23,14 @@ def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _read_json(path: Path, default: Any) -> Any:
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else default
+
+
+def _models(path: Path, model: type[Any]) -> list[Any]:
+    return [model(**item) for item in _read_json(path, [])]
+
+
 class JsonTicketStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
@@ -30,10 +39,8 @@ class JsonTicketStore:
         self._load()
 
     def _load(self) -> None:
-        if not self.path.exists():
-            return
         try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
+            raw = _read_json(self.path, {})
         except (OSError, json.JSONDecodeError) as exc:
             broken = self.path.with_name(f"{self.path.stem}.broken-{datetime.now():%Y%m%d%H%M%S}.json")
             logger.warning("工单文件损坏(%s)，移至 %s", exc, broken.name)
@@ -51,10 +58,7 @@ class JsonTicketStore:
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {
-            "updated_at": _now(),
-            "tickets": [record.model_dump() for record in self._tickets.values()],
-        }
+        payload = {"updated_at": _now(), "tickets": [record.model_dump() for record in self._tickets.values()]}
         tmp = self.path.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, self.path)
@@ -82,13 +86,8 @@ class JsonTicketStore:
 class JsonOrderStore:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
-        self._orders: list[OrderRecord] = []
-        self._by_no: dict[str, OrderRecord] = {}
-        if self.path.is_file():
-            for item in json.loads(self.path.read_text(encoding="utf-8")):
-                record = OrderRecord(**item)
-                self._orders.append(record)
-                self._by_no[record.order_no.upper()] = record
+        self._orders = _models(self.path, OrderRecord)
+        self._by_no = {order.order_no.upper(): order for order in self._orders}
 
     def get(self, order_no: str) -> OrderRecord | None:
         return self._by_no.get(order_no.strip().upper())
@@ -108,17 +107,16 @@ class JsonOrderStore:
                 continue
             if user_id is not None and order.user_id != user_id:
                 continue
-            if key:
-                text = " ".join(
-                    [
-                        order.order_no,
-                        str(order.user_id),
-                        *(str(value) for value in (order.user or {}).values()),
-                        *(str(item.get("product_name", "")) for item in order.items),
-                    ]
-                ).lower()
-                if key not in text:
-                    continue
+            text = " ".join(
+                [
+                    order.order_no,
+                    str(order.user_id),
+                    *(str(value) for value in (order.user or {}).values()),
+                    *(str(item.get("product_name", "")) for item in order.items),
+                ]
+            ).lower()
+            if key and key not in text:
+                continue
             rows.append(order)
         return sorted(rows, key=lambda order: order.created_at, reverse=True)[: max(limit, 0)]
 
@@ -128,16 +126,8 @@ class JsonOrderStore:
 
 class JsonKnowledgeCatalog:
     def __init__(self, articles_file: Path, categories_file: Path) -> None:
-        self._articles = (
-            [KnowledgeArticle(**item) for item in json.loads(articles_file.read_text(encoding="utf-8"))]
-            if articles_file.is_file()
-            else []
-        )
-        self._categories = (
-            [KnowledgeCategory(**item) for item in json.loads(categories_file.read_text(encoding="utf-8"))]
-            if categories_file.is_file()
-            else []
-        )
+        self._articles = _models(articles_file, KnowledgeArticle)
+        self._categories = _models(categories_file, KnowledgeCategory)
 
     def categories(self) -> list[KnowledgeCategory]:
         return sorted(self._categories, key=lambda item: item.sort_no)
@@ -151,16 +141,12 @@ class JsonKnowledgeCatalog:
         category_key = category.strip().lower()
         rows = []
         for article in self._articles:
-            if category_key and category_key not in {
-                article.category_code.lower(),
-                article.category_name.lower(),
-                str(article.category_id),
-            }:
+            categories = {article.category_code.lower(), article.category_name.lower(), str(article.category_id)}
+            if category_key and category_key not in categories:
                 continue
-            if key:
-                text = " ".join([article.title, article.summary, article.article_no, *article.tags]).lower()
-                if key not in text:
-                    continue
+            text = " ".join([article.title, article.summary, article.article_no, *article.tags]).lower()
+            if key and key not in text:
+                continue
             rows.append(article)
         return sorted(rows, key=lambda item: (item.is_top, item.sort_weight), reverse=True)[: max(limit, 0)]
 
