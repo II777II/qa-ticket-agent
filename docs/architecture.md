@@ -198,7 +198,7 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 | --- | --- | --- | --- | --- |
 | 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/llm/factory.py` 加分支 |
 | 记忆 | `InMemorySaver`（进程内存） | `BaseCheckpointSaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
-| 检索 | 关键词 IDF 打分 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
+| 检索 | 关键词命中 + 标题加权 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
 | LLM 可观测性 | 可选 Langfuse CallbackHandler | LangChain callbacks | Langfuse Cloud / 自托管 | `.env: LANGFUSE_ENABLED=true` |
 

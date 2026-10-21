@@ -203,8 +203,8 @@ python -m backend.scripts.generate_ecommerce_demo
 
 1. Markdown 按 `##` 切小节；HTML 按 `<h2>` 切块并去掉标签；
 2. 查询与片段都按「英文单词 + 中文二元组」切词；
-3. 用 IDF 加权词频打分，除以片段长度平方根（防止长小节占便宜），取 `RAG_TOP_K`（默认 3）条；
-4. 低于 `min_score` 视为没检到——此时不注入任何资料，模型会说「知识库里没有这个流程」。
+3. 用查询词与片段的关键词命中数打分，标题命中额外加权，取 `RAG_TOP_K`（默认 3）条；
+4. 至少命中 1 个有效查询词才视为召回；否则不注入资料。
 
 命中的片段以 `【参考资料】` 块拼进系统提示，同时把出处通过 `citation` 事件回传前端，
 回答里标 `[1][2]` 对应片段。参考资料**不进消息历史**，所以多轮对话不会被旧资料撑爆。
@@ -231,7 +231,7 @@ backend/
     logging.py         日志初始化（手写 Handler，避免 basicConfig 静默失效）
     llm/               模型工厂 + 演示模式假模型
     memory/            短期记忆（checkpointer）工厂
-    retrieval/         进程内检索（切块 + IDF 打分 + 拼参考资料）与工厂
+    retrieval/         进程内检索（切块 + 关键词命中打分 + 拼参考资料）
     persistence/       工单/订单 JSON 存储、知识库目录与工厂
     observability/     进程内指标 + 可选 Langfuse tracing
   api/                 接口层

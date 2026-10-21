@@ -61,7 +61,6 @@ class KnowledgeHit(BaseModel):
     title: str
     snippet: str = ""
     score: float | None = None
-    coverage: float | None = None
 
 
 class ServiceConfirmRequest(BaseModel):

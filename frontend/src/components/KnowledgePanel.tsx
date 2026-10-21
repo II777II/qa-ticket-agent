@@ -50,7 +50,7 @@ export default function KnowledgePanel({ question, hits, loading, onRefresh }: K
 
       <Space orientation="vertical" size={2} className="panel-foot">
         <Text type="secondary" style={{ fontSize: 11 }}>
-          检索为关键词 IDF 打分（覆盖率阈值 0.25），top-k 由后端 RAG_TOP_K 控制上限。
+          检索为关键词命中数与标题加权，top-k 由后端 RAG_TOP_K 控制上限。
         </Text>
       </Space>
     </aside>

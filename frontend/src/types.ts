@@ -150,7 +150,6 @@ export interface KnowledgeHit {
   title: string;
   snippet: string;
   score?: number | null;
-  coverage?: number | null;
 }
 
 export interface MetricsKpi {

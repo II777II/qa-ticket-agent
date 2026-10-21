@@ -96,5 +96,5 @@ python -m backend.scripts.generate_ecommerce_demo
 | `/` 返回 JSON 而不是页面 | 还没构建前端 | `npm --prefix frontend run build` 后重启后端 |
 | 5173 打不开 | Vite 未启动（或首次预打包较慢） | `npm run dev`，等 `ready` 后再打开 |
 | `localhost:端口` 连不上 | 服务只绑了 IPv4，而 localhost 先解析到 `::1` | 用 `127.0.0.1` 访问 |
-| 回答里没有引用 | 知识库为空或低于 `min_score` | 看启动日志的知识库统计，调 `RAG_TOP_K` / 文档措辞 |
+| 回答里没有引用 | 知识库为空或没有关键词命中 | 看启动日志的知识库统计，调整 `RAG_TOP_K` / 文档措辞 |
 | 前端提示「连不上后端」 | 后端未启动或端口不对 | 起后端；同源托管模式下确认访问的是后端端口 |

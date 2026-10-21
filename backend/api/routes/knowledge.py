@@ -56,7 +56,6 @@ async def search_knowledge(
             title=str(document.metadata.get("title", "")),
             snippet=document.page_content.strip()[:200],
             score=document.metadata.get("score"),
-            coverage=document.metadata.get("coverage"),
         )
         for position, document in enumerate(documents, start=1)
     ]

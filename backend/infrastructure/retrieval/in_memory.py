@@ -1,17 +1,10 @@
-"""进程内检索：把知识库文档切块，用「中文 bigram + 英文单词」词频打分取 top_k。
-
-为什么不用向量库/嵌入模型：POC 要的是「不联网、不装额外依赖、结果可解释」。
-关键词打分在 IT 服务台这种术语集中的场景够用（VPN、691、驱动、SLA 都是强特征词），
-而且命中哪一段、为什么命中一清二楚，演示时好讲。
-
-想验证它的短板也很容易：换个说法（同义词）就可能检不到——这正是生产环境要上
-嵌入向量 + 混合检索 + 重排的原因。
-"""
+"""进程内知识检索：HTML 按 h2 切块，关键词命中数排序。"""
 
 from __future__ import annotations
 
-import math
 import re
+from dataclasses import dataclass
+from html import unescape
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -22,167 +15,109 @@ from pydantic import Field, PrivateAttr
 
 CONTEXT_HEADER = "【参考资料】"
 CONTEXT_FOOTER = "【参考资料结束】"
-
 SUPPORTED_SUFFIXES = {".md", ".txt", ".html"}
 LATIN_WORD = re.compile(r"[a-zA-Z0-9_]{2,}")
 CJK = re.compile(r"[\u4e00-\u9fff]")
+STOP_WORDS = {
+    "什么",
+    "怎么",
+    "如何",
+    "可以",
+    "是否",
+    "这个",
+    "那个",
+    "比较",
+    "请问",
+    "帮我",
+}
 
-# 虚词组成的二元组：命中它们不代表语义相关（「今天午饭吃什么」曾靠「什么」检到工单 SLA）
-STOP_BIGRAMS = frozenset(
-    {
-        "什么", "为什", "怎么", "怎样", "如何", "可以", "能否", "是否", "一下", "我们", "你们",
-        "他们", "这个", "那个", "这些", "那些", "比较", "还是", "就是", "有没有", "没有", "请问",
-        "帮我", "我的", "我要", "需要", "应该", "然后", "而且", "如果", "因为", "所以", "但是",
-    }
-)
 
-
-def _tokens(text: str) -> list[str]:
-    """粗粒度分词：英文按单词，中文按二元组（不需要 jieba 之类的依赖）。"""
+def _tokens(text: str) -> set[str]:
     lowered = text.lower()
-    result = [word for word in LATIN_WORD.findall(lowered) if word not in STOP_BIGRAMS]
-    cjk_chars = "".join(CJK.findall(lowered))
-    bigrams = (cjk_chars[i : i + 2] for i in range(max(len(cjk_chars) - 1, 0)))
-    result.extend(token for token in bigrams if token not in STOP_BIGRAMS)
-    if len(cjk_chars) == 1:
-        result.append(cjk_chars)
+    result = {word for word in LATIN_WORD.findall(lowered) if word not in STOP_WORDS}
+    chars = "".join(CJK.findall(lowered))
+    result.update(
+        token
+        for token in (chars[index : index + 2] for index in range(max(len(chars) - 1, 0)))
+        if token not in STOP_WORDS
+    )
+    if len(chars) == 1:
+        result.add(chars)
     return result
 
 
-def _split_sections(path: Path) -> list[tuple[str, str]]:
-    """按 Markdown 二级标题切小节；没有二级标题的按空行切段。
-
-    一级标题（# xxx）当作文档标题，标题与首个二级标题之间的「更新日期 / 维护」
-    这类元信息直接丢掉——它们对检索没价值，留着只会挤掉正文占一个引用位。
-    HTML 知识页走 `_split_html_sections`。
-    """
-    if path.suffix.lower() == ".html":
-        return _split_html_sections(path)
-
-    text = path.read_text(encoding="utf-8").strip()
-    sections: list[tuple[str, str]] = []
-    doc_title = path.stem
-    current_title: str | None = None
-    buffer: list[str] = []
-
-    def flush() -> None:
-        if current_title is None:
-            return
-        body = "\n".join(buffer).strip()
-        if body:
-            title = doc_title if current_title == doc_title else f"{doc_title} · {current_title}"
-            sections.append((title, body))
-
-    for line in text.splitlines():
-        stripped = line.strip()
-        if stripped.startswith("## "):
-            flush()
-            buffer = []
-            current_title = stripped[3:].strip() or current_title
-            continue
-        if stripped.startswith("# ") and current_title is None and not buffer:
-            doc_title = stripped[2:].strip() or doc_title
-            continue
-        if current_title is not None:
-            buffer.append(line)
-    flush()
-
-    if not sections:  # 纯文本、没有二级标题时退化成按空行切段
-        blocks = [block.strip() for block in text.split("\n\n") if block.strip()]
-        sections = [(doc_title, block) for block in blocks]
-    return sections
-
-
-def _split_html_sections(path: Path) -> list[tuple[str, str]]:
-    """把知识库 HTML 页切成小节：按 <h2> 切块，去标签并解码实体。"""
-    import re
-    from html import unescape
-
-    raw = path.read_text(encoding="utf-8")
-    title_match = re.search(r"<title>(.*?)</title>", raw, flags=re.S | re.I)
-    doc_title = unescape(re.sub(r"\s+", " ", title_match.group(1)).strip()) if title_match else path.stem
-    doc_title = doc_title.split(" - ")[0].strip() or path.stem
-
-    body = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", raw)
-    parts = re.split(r"(?is)<h2[^>]*>(.*?)</h2>", body)
-    sections: list[tuple[str, str]] = []
-    if len(parts) == 1:
-        text = _html_to_text(body)
-        return [(doc_title, text)] if text else []
-
-    intro = _html_to_text(parts[0])
-    for index in range(1, len(parts), 2):
-        heading = unescape(re.sub(r"<[^>]+>", "", parts[index])).strip()
-        content = _html_to_text(parts[index + 1] if index + 1 < len(parts) else "")
-        if not content:
-            continue
-        if index == 1 and intro:
-            content = f"{intro}\n{content}"
-        sections.append((f"{doc_title} · {heading}" if heading else doc_title, content))
-    return sections
-
-
-def _html_to_text(fragment: str) -> str:
-    import re
-    from html import unescape
-
-    text = re.sub(r"(?is)<(br|/p|/div|/li|/dd|/dt|/h\d)[^>]*>", "\n", fragment)
-    text = re.sub(r"(?is)<li[^>]*>", "• ", text)
-    text = re.sub(r"(?s)<[^>]+>", " ", text)
-    text = unescape(text)
-    lines = [line.strip() for line in text.splitlines()]
+def _html_text(fragment: str) -> str:
+    fragment = re.sub(r"(?is)<(script|style)\b.*?</\1>", " ", fragment)
+    fragment = re.sub(r"(?is)<(br|/p|/div|/li|/h\d)[^>]*>", "\n", fragment)
+    fragment = re.sub(r"(?s)<[^>]+>", " ", fragment)
+    lines = [line.strip() for line in unescape(fragment).splitlines()]
     return "\n".join(line for line in lines if line)
 
 
-class _Chunk:
-    __slots__ = ("source", "title", "text", "tokens", "length")
+def _split_sections(path: Path) -> list[tuple[str, str]]:
+    raw = path.read_text(encoding="utf-8")
+    if path.suffix.lower() != ".html":
+        title = path.stem
+        blocks = [block.strip() for block in re.split(r"(?m)^##\s+", raw) if block.strip()]
+        if len(blocks) == 1:
+            return [(title, _html_text(blocks[0]))]
+        return [
+            (f"{title} · {block.splitlines()[0].strip()}", _html_text(block)) for block in blocks[1:]
+        ]
 
-    def __init__(self, source: str, title: str, text: str) -> None:
-        self.source = source
-        self.title = title
-        self.text = text
-        self.tokens = _tokens(f"{title} {text}")
-        self.length = max(len(self.tokens), 1)
+    title_match = re.search(r"<title>(.*?)</title>", raw, flags=re.S | re.I)
+    title = unescape(title_match.group(1)).split(" - ")[0].strip() if title_match else path.stem
+    parts = re.split(r"(?is)<h2[^>]*>(.*?)</h2>", raw)
+    if len(parts) == 1:
+        body = _html_text(parts[0])
+        return [(title, body)] if body else []
+
+    sections = []
+    for index in range(1, len(parts), 2):
+        heading = _html_text(parts[index])
+        body = _html_text(parts[index + 1] if index + 1 < len(parts) else "")
+        if body:
+            sections.append((f"{title} · {heading}" if heading else title, body))
+    return sections
+
+
+@dataclass(slots=True)
+class _Chunk:
+    source: str
+    title: str
+    text: str
+    tokens: set[str]
+    title_tokens: set[str]
 
 
 class InMemoryRetriever(BaseRetriever):
-    """LangChain 标准的 BaseRetriever 实现，可被 retriever.invoke(query) 调用。"""
+    """关键词检索器，接口兼容 LangChain BaseRetriever。"""
 
     docs_dir: Path = Field(description="知识库目录")
     top_k: int = Field(default=3, description="返回片段数")
-    min_score: float = Field(default=0.08, description="排序分下限，低于它视为没检到")
-    min_coverage: float = Field(
-        default=0.25,
-        description="查询词权重被命中的比例下限。只靠一两个通用词蒙中的片段会被挡掉",
-    )
 
     _chunks: list[_Chunk] = PrivateAttr(default_factory=list)
-    _idf: dict[str, float] = PrivateAttr(default_factory=dict)
 
     def model_post_init(self, __context: Any) -> None:
-        self._load()
-
-    # ---------------- 加载与索引 ----------------
-    def _load(self) -> None:
         if not self.docs_dir.exists():
             return
         for path in sorted(self.docs_dir.rglob("*")):
-            if not path.is_file() or path.suffix.lower() not in SUPPORTED_SUFFIXES:
+            if (
+                not path.is_file()
+                or path.suffix.lower() not in SUPPORTED_SUFFIXES
+                or path.name.lower() in {"readme.md", "index.html"}
+            ):
                 continue
-            if path.name.lower() == "readme.md":  # 目录说明不算知识
-                continue
-            if path.name.lower() == "index.html":  # 帮助中心目录页不算知识
-                continue
-            for title, body in _split_sections(path):
-                self._chunks.append(_Chunk(path.name, title, body))
-
-        # 逆文档频率：命中「VPN」比对「的」更有信息量
-        total = len(self._chunks)
-        df: dict[str, int] = {}
-        for chunk in self._chunks:
-            for token in set(chunk.tokens):
-                df[token] = df.get(token, 0) + 1
-        self._idf = {token: math.log((total + 1) / (count + 0.5)) + 1 for token, count in df.items()}
+            for title, text in _split_sections(path):
+                self._chunks.append(
+                    _Chunk(
+                        path.name,
+                        title,
+                        text,
+                        _tokens(f"{title} {text}"),
+                        _tokens(title),
+                    )
+                )
 
     @property
     def chunks(self) -> list[_Chunk]:
@@ -194,36 +129,6 @@ class InMemoryRetriever(BaseRetriever):
     def chunk_count(self) -> int:
         return len(self._chunks)
 
-    # ---------------- 检索 ----------------
-    def _match(self, query_tokens: Sequence[str], chunk: _Chunk) -> tuple[float, float]:
-        """返回 (排序分, 覆盖率)。
-
-        排序分 = 命中权重 / sqrt(片段长度)，用于排序；
-        覆盖率 = 命中的查询词权重 / 查询词总权重，用于判断「是否真的在回答这个问题」——
-        长片段靠词多拿高分的毛病，和短查询靠一两个通用词蒙中的毛病，分别靠这两个量挡住。
-        """
-        if not query_tokens:
-            return 0.0, 0.0
-        counts: dict[str, int] = {}
-        for token in chunk.tokens:
-            counts[token] = counts.get(token, 0) + 1
-
-        score = 0.0
-        hit_weight = 0.0
-        total_weight = 0.0
-        for token in set(query_tokens):
-            weight = self._idf.get(token, 1.0)
-            total_weight += weight
-            tf = counts.get(token, 0)
-            if not tf:
-                continue
-            score += weight * (1 + math.log(tf))
-            hit_weight += weight
-        if not total_weight:
-            return 0.0, 0.0
-        # 除以长度平方根，避免长小节靠「词多」占便宜
-        return score / math.sqrt(chunk.length), hit_weight / total_weight
-
     def _get_relevant_documents(
         self,
         query: str,
@@ -233,42 +138,36 @@ class InMemoryRetriever(BaseRetriever):
         return self._rank(query, self.top_k)
 
     def search(self, query: str, top_k: int | None = None) -> list[Document]:
-        """供「知识库查询」面板直接使用：可以临时覆盖 top_k。"""
         return self._rank(query, top_k or self.top_k)
 
     def _rank(self, query: str, limit: int) -> list[Document]:
         query_tokens = _tokens(query)
         scored = []
         for chunk in self._chunks:
-            score, coverage = self._match(query_tokens, chunk)
-            if score >= self.min_score and coverage >= self.min_coverage:
-                scored.append((score, coverage, chunk))
-        scored.sort(key=lambda item: item[0], reverse=True)
-
-        documents: list[Document] = []
-        for rank, (score, coverage, chunk) in enumerate(scored[: max(limit, 0)], start=1):
-            documents.append(
-                Document(
-                    page_content=chunk.text,
-                    metadata={
-                        "index": rank,
-                        "source": chunk.source,
-                        "title": chunk.title,
-                        "score": round(score, 4),
-                        "coverage": round(coverage, 4),
-                    },
-                )
+            hits = len(query_tokens & chunk.tokens)
+            if hits > 0:
+                title_hits = len(query_tokens & chunk.title_tokens)
+                scored.append((float(hits + title_hits * 2), chunk))
+        scored.sort(key=lambda item: (-item[0], item[1].source, item[1].title))
+        return [
+            Document(
+                page_content=chunk.text,
+                metadata={
+                    "index": rank,
+                    "source": chunk.source,
+                    "title": chunk.title,
+                    "score": score,
+                },
             )
-        return documents
+            for rank, (score, chunk) in enumerate(scored[: max(limit, 0)], start=1)
+        ]
 
 
-def format_context(documents: list[Document]) -> str:
-    """拼成给模型看的参考资料块。mock 模型也会读这个块，所以格式要稳定。"""
+def format_context(documents: Sequence[Document]) -> str:
     lines = [CONTEXT_HEADER]
-    for position, document in enumerate(documents, start=1):
-        metadata = document.metadata
-        lines.append(f"[{position}] {metadata.get('source')} · {metadata.get('title')}")
-        lines.append(document.page_content.strip())
-        lines.append("")
+    for index, document in enumerate(documents, start=1):
+        title = document.metadata.get("title", "")
+        source = document.metadata.get("source", "")
+        lines.extend([f"[{index}] {source} · {title}", document.page_content.strip(), ""])
     lines.append(CONTEXT_FOOTER)
     return "\n".join(lines)
