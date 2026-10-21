@@ -4,8 +4,7 @@
 翻译成 token、tool、ticket、citation 事件。HTTP 的 SSE 与命令行验收脚本消费同一套事件，
 所以「页面上看到的」和「命令行看到的」行为一致。
 
-事件常量定义在 backend/schemas.py（接口层契约），这一层只负责产生事件，
-不负责编码成 SSE——那属于接口层。
+事件常量定义在 application/contracts，这一层只负责产生事件，不负责编码 SSE。
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from typing import TYPE_CHECKING, Any, AsyncIterator, Iterator
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, ToolMessage
 
-from backend.application.chat.events import (
+from backend.application.contracts import (
     EVENT_DONE,
     EVENT_ERROR,
     EVENT_START,

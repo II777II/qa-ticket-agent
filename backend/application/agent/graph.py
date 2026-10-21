@@ -22,7 +22,7 @@ from langgraph.types import StreamWriter
 
 from backend.application.agent.classifier import classify_intent
 from backend.application.agent.prompts import SYSTEM_PROMPT
-from backend.application.chat.events import (
+from backend.application.contracts import (
     EVENT_CITATION,
     EVENT_INTENT,
     EVENT_ORDER,

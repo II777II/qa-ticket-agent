@@ -2,13 +2,13 @@
 
 分两层：
 
-- **自动化用例**（107 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、异常兜底、Langfuse、检索、存储、工具、接口与整链；
+- **自动化用例**（109 个，`backend/tests/`）——后端链路、订单/知识库数据、四路意图路由、业务确认、custom 流、异常兜底、Langfuse、包契约、检索、存储、工具、接口与整链；
 - **手工用例**（前端交互，`M-xx`）——流式渲染、抽屉、中断这类必须肉眼确认的部分。
 
 ```powershell
 conda activate qa-ticket
 cd E:\Code\chatgpt\qa-ticket-agent
-python -m pytest              # 107 passed in ~12s
+python -m pytest              # 109 passed in ~12s
 python -m pytest -v           # 看每个用例名
 python -m pytest backend/tests/test_store.py   # 只跑某一块
 ```
@@ -74,6 +74,8 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | G-08 | 检索异常降级 | 注入会抛异常的检索器 | 仍返回回答，`retrieved == []`，不抛错 |
 | G-09 | 会话隔离 | 两个 thread_id 各问一轮 | 各自消息累积，互不串味 |
 | G-10 | LangGraph custom 事件 | 直接订阅 `stream_mode="custom"` 执行维修分支 | 收到且只收到一条 `service_draft`，事件载荷含维修槽位 |
+| G-11 | Chat 包公开门面 | 检查 `application.chat.__all__` | 只包含 `ChatService`，不把 EVENT_* 重新混入 chat 包 |
+| G-12 | 共享事件契约 | 从 `application.contracts` 导入 EVENT_* | 事件常量可用，契约归属独立模块 |
 
 ## 五、接口（`test_api.py`）
 

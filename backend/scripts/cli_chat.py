@@ -16,7 +16,7 @@ import asyncio
 import sys
 
 from backend.application.chat import ChatService
-from backend.application.chat.events import (
+from backend.application.contracts import (
     EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,

@@ -10,7 +10,7 @@ from fastapi.sse import ServerSentEvent
 
 from backend.api.schemas import ChatRequest
 from backend.application.chat import ChatService
-from backend.application.chat.events import EVENT_ERROR
+from backend.application.contracts import EVENT_ERROR
 from backend.domain.intent import IntentName
 
 logger = logging.getLogger("qa_ticket.streaming")

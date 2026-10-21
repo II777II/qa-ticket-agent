@@ -1,7 +1,7 @@
 """接口层数据结构：HTTP 请求体与响应体。
 
 事件名本身（start / intent / token / order / service_draft / citation / done / error）定义在
-application/chat/events.py；SSE 报文由 FastAPI 内置 EventSourceResponse 与
+application/contracts/chat_events.py；SSE 报文由 FastAPI 内置 EventSourceResponse 与
 ServerSentEvent 编码。
 """
 

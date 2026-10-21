@@ -1,4 +1,4 @@
-"""对话事件词表——应用层与接口层之间的契约。
+"""对话事件词表——应用层组件与接口适配器之间的共享契约。
 
     start     一轮开始（带模型名与是否演示模式）
     intent    意图识别结果（意图/置信度/原因/槽位）
@@ -11,8 +11,8 @@
     done      一轮结束
     error     出错
 
-应用层负责产生它们，接口层负责编码成 SSE（`api/schemas.py` 的 `sse()`），
-CLI 与前端按事件名分发。加能力 = 加事件名，不动接口形状。
+LangGraph 节点与 ChatService 负责产生事件；API、CLI 和前端按事件名消费。
+FastAPI 路由层负责把 `ServerSentEvent` 编码成 SSE。
 """
 
 from __future__ import annotations

@@ -101,7 +101,7 @@ LangGraph 的 `ToolNode` 负责执行，返回值作为一条 `ToolMessage` 回�
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `app.py` 组装、`routes/`（dialogue / system / chat / agent）、`schemas.py`（DTO 与 SSE 编码） | 不改 |
 | 接口层（数据接口） | `backend/api/routes/knowledge.py`、`orders.py`、`metrics.py` | 知识库检索/目录、订单查询、运营指标 | 不改 |
-| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/`（graph / tools / prompts）；`chat/service.py`（一轮对话）；`tickets/service.py`（售后工单）；`orders/service.py`（订单查询）；`knowledge/service.py`（知识库目录） | 加用例不改图 |
+| 应用层 | `backend/application/` | `runtime.py` 装配；`agent/` 编排；`chat/service.py` 对话用例；`contracts/chat_events.py` 共享事件；`tickets` / `orders` / `knowledge` 业务用例 | 加用例不改图 |
 | 领域层 | `backend/domain/` | `models.py` 实体、`rules.py` 枚举与状态流转/去重规则、`errors.py` 领域异常 | 不改 |
 | 基础设施层 | `backend/infrastructure/` | `config.py`、`logging.py`、`llm/`、`memory/`、`retrieval/`、`persistence/`、`observability/`（指标 + 可选 Langfuse）、`version.py` | 只加一个分支 |
 
@@ -185,6 +185,10 @@ service       → service_draft
 ChatService 不再从 updates 中反推这些业务事件。状态仍写回 LangGraph checkpoint；
 custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“从 updates 映射事件”的实现，
 便于对比两种写法。
+
+`EVENT_*` 属于跨 Agent、Chat、API 与 CLI 的共享契约，统一放在
+`application/contracts/chat_events.py`。`application/chat` 包的公开门面只导出
+`ChatService`，不再承担契约分发职责，避免共享事件被误认为 chat 私有实现。
 
 ## 四个扩展点与生产替换
 
