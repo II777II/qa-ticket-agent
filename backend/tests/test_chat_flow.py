@@ -95,3 +95,10 @@ def test_view_name_order_extracts_customer_name(isolated_runtime: AgentRuntime) 
     result = _turn(isolated_runtime, "查看张三订单", "flow-view-order")
     assert result["orders"]
     assert "没有找到订单" not in result["text"]
+
+
+def test_want_name_order_uses_order_tool(isolated_runtime: AgentRuntime) -> None:
+    result = _turn(isolated_runtime, "我要朱一订单", "flow-want-order")
+    assert result["orders"]
+    assert result["citations"] == []
+    assert all(order["customer"] == "朱一" for order in result["orders"])
