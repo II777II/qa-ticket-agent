@@ -104,10 +104,8 @@ Retriever 调用会自动上报；`thread_id` 作为 session ID。初始化或�
 | GET | `/api/kb/search?q=&top_k=` | 知识库检索命中（来源、小节、片段、相关度），供右侧知识面板 |
 | GET | `/api/kb/articles?q=&category=` | 知识库文章列表（目录/分类/关键字） |
 | GET | `/api/kb/categories` | 知识库分类 |
-| GET | `/api/kb/articles/{article_no}` | 文章元信息（含 HTML 页面 URL） |
 | GET | `/api/metrics/summary?days=7` | 运营指标：Token、首字延迟、请求量、错误率、按意图明细 |
 | GET | `/api/orders?q=&status=&user_id=` | 电商订单查询（50 条演示订单） |
-| GET | `/api/orders/{order_no}` | 订单详情（明细、地址、支付、退款、状态时间线） |
 | GET | `/kb/index.html`、`/kb/pages/*.html` | 知识库静态 HTML 页面（可直接浏览） |
 
 所有对话接口共用 `start` / `intent` / `token` / `order` / `service_draft` /
@@ -238,8 +236,7 @@ backend/
     app.py             FastAPI 组装（中间件、路由注册、静态托管、生命周期）
     deps.py            依赖取用点（从 app.state 取运行时与用例）
     streaming.py       SSE 响应封装（/chat 与 /branch/* 共用）
-    routes/            dialogue.py / chat.py / branches.py / service.py
-                       orders.py / knowledge.py / metrics.py / system.py
+    routes/            dialogue.py / service.py / resources.py / system.py
     schemas.py         请求响应模型与 SSE 编码
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）

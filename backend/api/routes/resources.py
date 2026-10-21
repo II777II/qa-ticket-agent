@@ -1,23 +1,35 @@
-"""知识库路由：供「对话 + 知识库检索」页面右侧面板使用。"""
+"""订单、知识库和运营指标数据接口。"""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
 from backend.api.deps import get_runtime
-from backend.api.schemas import KnowledgeHit
+from backend.api.schemas import KnowledgeHit, MetricsSummary
 from backend.application.runtime import AgentRuntime
 from backend.domain.knowledge import KnowledgeArticle, KnowledgeCategory
+from backend.domain.orders import OrderRecord
 
-router = APIRouter(tags=["knowledge"])
+router = APIRouter()
 
 
-@router.get("/api/kb/categories", response_model=list[KnowledgeCategory], summary="知识库分类")
+@router.get("/api/orders", response_model=list[OrderRecord], tags=["orders"])
+async def list_orders(
+    q: str = "",
+    status: int | None = None,
+    user_id: int | None = None,
+    limit: int = 20,
+    runtime: AgentRuntime = Depends(get_runtime),
+) -> list[OrderRecord]:
+    return runtime.orders.search(q=q, status=status, user_id=user_id, limit=limit)
+
+
+@router.get("/api/kb/categories", response_model=list[KnowledgeCategory], tags=["knowledge"])
 async def list_categories(runtime: AgentRuntime = Depends(get_runtime)) -> list[KnowledgeCategory]:
     return runtime.knowledge.categories()
 
 
-@router.get("/api/kb/articles", response_model=list[KnowledgeArticle], summary="知识库文章列表")
+@router.get("/api/kb/articles", response_model=list[KnowledgeArticle], tags=["knowledge"])
 async def list_articles(
     q: str = "",
     category: str = "",
@@ -27,17 +39,7 @@ async def list_articles(
     return runtime.knowledge.search(q=q, category=category, limit=limit)
 
 
-@router.get("/api/kb/articles/{article_no}", response_model=KnowledgeArticle, summary="知识库文章详情")
-async def get_article(article_no: str, runtime: AgentRuntime = Depends(get_runtime)) -> KnowledgeArticle:
-    article = runtime.knowledge.get(article_no)
-    if article is None:
-        from fastapi import HTTPException
-
-        raise HTTPException(status_code=404, detail=f"文章不存在: {article_no}")
-    return article
-
-
-@router.get("/api/kb/search", response_model=list[KnowledgeHit], summary="知识库检索")
+@router.get("/api/kb/search", response_model=list[KnowledgeHit], tags=["knowledge"])
 async def search_knowledge(
     q: str,
     top_k: int = 5,
@@ -46,7 +48,6 @@ async def search_knowledge(
     retriever = runtime.retriever
     if retriever is None or not q.strip():
         return []
-
     search = getattr(retriever, "search", None)
     documents = search(q, top_k=top_k) if callable(search) else list(retriever.invoke(q))[:top_k]
     return [
@@ -59,3 +60,8 @@ async def search_knowledge(
         )
         for position, document in enumerate(documents, start=1)
     ]
+
+
+@router.get("/api/metrics/summary", response_model=MetricsSummary, tags=["metrics"])
+async def metrics_summary(days: int = 7, runtime: AgentRuntime = Depends(get_runtime)) -> MetricsSummary:
+    return MetricsSummary(**runtime.metrics.summary(days=days))

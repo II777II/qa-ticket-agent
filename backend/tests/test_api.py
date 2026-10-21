@@ -10,8 +10,6 @@ import pytest
 from langchain_core.messages import ToolMessage
 
 from backend.api.app import app as api_app
-from backend.api.routes import branches as branch_routes
-from backend.api.routes import chat as chat_routes
 from backend.api.routes import dialogue as dialogue_routes
 from backend.api.routes import service as service_routes
 from backend.application.chat.service import _tool_events
@@ -99,7 +97,7 @@ def test_ticket_routes_are_not_mounted(isolated_runtime: AgentRuntime) -> None:
     assert asyncio.run(_get("/api/tickets/TK-19700101-0001")).status_code == 404
 
 
-def test_openapi_mounts_chat_and_four_branch_routes() -> None:
+def test_openapi_mounts_chat_and_five_branch_routes() -> None:
     paths = api_app.openapi()["paths"]
     assert "/chat" in paths
     assert paths["/branch/knowledge"]["post"]
@@ -113,17 +111,16 @@ def test_openapi_mounts_chat_and_four_branch_routes() -> None:
 
 def test_dialogue_router_owns_chat_and_intent_branches_only() -> None:
     """服务动作不应混入 dialogue 聚合层。"""
-    included = [
-        getattr(route, "original_router", None)
-        for route in dialogue_routes.router.routes
-    ]
-    assert any(router is chat_routes.router for router in included)
-    assert any(router is branch_routes.router for router in included)
-    assert not any(router is service_routes.router for router in included)
-    assert not any(
-        getattr(route, "original_router", None) is branch_routes.router
-        for route in chat_routes.router.routes
-    )
+    paths = {route.path for route in dialogue_routes.router.routes}
+    assert paths == {
+        "/chat",
+        "/branch/knowledge",
+        "/branch/query",
+        "/branch/service",
+        "/branch/logistics",
+        "/branch/fallback",
+    }
+    assert service_routes.router is not dialogue_routes.router
 
 
 def test_openapi_separates_intent_branches_and_service_actions() -> None:
@@ -245,13 +242,7 @@ def test_orders_api(isolated_runtime: AgentRuntime) -> None:
     assert order_no.startswith("SO")
     assert listing[0]["status_label"]
 
-    detail = asyncio.run(_get(f"/api/orders/{order_no.lower()}"))
-    assert detail.status_code == 200
-    assert detail.json()["order_no"] == order_no
-    assert detail.json()["items"]
-
-    missing = asyncio.run(_get("/api/orders/SO197001019999"))
-    assert missing.status_code == 404
+    assert listing[0]["items"]
 
 
 def test_kb_article_catalog(isolated_runtime: AgentRuntime) -> None:
@@ -262,9 +253,7 @@ def test_kb_article_catalog(isolated_runtime: AgentRuntime) -> None:
     articles = asyncio.run(_get("/api/kb/articles?category=AFTERSALE")).json()
     assert articles and all(item["category_code"] == "AFTERSALE" for item in articles)
 
-    detail = asyncio.run(_get(f"/api/kb/articles/{articles[0]['article_no']}"))
-    assert detail.status_code == 200
-    assert detail.json()["url"].startswith("/kb/pages/")
+    assert articles[0]["url"].startswith("/kb/pages/")
 
 
 def test_chat_order_query_sse(isolated_runtime: AgentRuntime) -> None:

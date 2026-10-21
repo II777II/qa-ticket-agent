@@ -72,10 +72,6 @@ export function listOrders(params: { q?: string; status?: number; user_id?: numb
   return requestJson<OrderRecord[]>(`/api/orders?${search.toString()}`);
 }
 
-export function getOrder(orderNo: string): Promise<OrderRecord> {
-  return requestJson<OrderRecord>(`/api/orders/${encodeURIComponent(orderNo)}`);
-}
-
 export function confirmService(payload: ServiceConfirmPayload): Promise<ServiceConfirmResult> {
   return requestJson<ServiceConfirmResult>("/branch/service/confirm", {
     method: "POST",
