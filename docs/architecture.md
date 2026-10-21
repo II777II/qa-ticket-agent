@@ -26,7 +26,7 @@ python -m backend.scripts.draw_graph --png --html
 
 ```python
 from IPython.display import Image, display
-from backend.application.core import create_runtime
+from backend.application.runtime import create_runtime
 
 graph = create_runtime().graph
 display(Image(graph.get_graph().draw_mermaid_png()))   # 联网渲染
@@ -82,9 +82,9 @@ read、write、human 三类都是明确、可测试的执行路径；read 内部
 | --- | --- | --- | --- |
 | 表现层 | `frontend/src/*` | 对话界面、工单面板、SSE 客户端 | 只改 `api/agent.ts` |
 | 接口层 | `backend/api/` | `core.py` 集中请求模型、全部路由、SSE、FastAPI 与静态托管；`app.py` 是 ASGI 入口 | 不改 |
-| 应用层 | `backend/application/core.py` | `build_graph()` 三路编排、read 工具分派、`ChatService`、`AgentRuntime` | 加分支时改当前文件 |
+| 应用层 | `backend/application/` | `agent.py` 三路编排与工具，`chat.py` 对话用例，`runtime.py` 运行装配 | 按职责修改对应文件 |
 | 领域层 | `backend/domain/core.py` | 实体、意图/槽位、订单摘要、分类/优先级/去重/单号规则 | 不改 |
-| 基础设施层 | `backend/infrastructure/core.py` | 配置、日志、版本、JSON 仓储、RAG、LLM、指标与 Langfuse | 当前文件内加工厂分支 |
+| 基础设施层 | `backend/infrastructure/` | 配置、仓储、检索、模型、指标与 Langfuse 分文件维护 | 按适配器扩展 |
 
 依赖方向单向：`api → application → domain`，`infrastructure` 由 `application` 在装配时注入。
 领域层不 import FastAPI / LangChain；接口层不写业务规则。
@@ -93,7 +93,7 @@ read、write、human 三类都是明确、可测试的执行路径；read 内部
 
 ```text
 main app
-└── api/core.py router
+└── api/routes.py router
     ├── POST /chat
     ├── POST /branch/read
     ├── POST /branch/write
@@ -102,7 +102,7 @@ main app
     └── POST /api/llm/config
 ```
 
-`app.py` 只暴露 `api/core.py` 中的应用实例。`/branch/*`
+`app.py` 负责应用组装和生命周期，`routes.py` 负责 HTTP/SSE 路由。`/branch/*`
 SSE 入口标记为 `intent-branches`；`/branch/service/confirm` 是用户确认后的业务写操作，
 标记为 `service-actions`，不再混入 Agent 或意图分支分组。
 
@@ -173,13 +173,13 @@ custom 事件只负责实时输出。对应的 `sse-abstract` 分支保留了“
 便于对比两种写法。
 
 `EVENT_*` 属于跨 Agent、Chat、API 与 CLI 的共享契约，统一放在
-`application/core.py`。Chat、Agent 与 API 直接引用同一组常量，不再维护包门面。
+`application/agent.py`。Chat、Agent 与 API 直接引用同一组常量，不再维护包门面。
 
 ## 四个扩展点与生产替换
 
 | 扩展点 | POC 实现 | 抽象接口 | 生产替换 | 怎么换 |
 | --- | --- | --- | --- | --- |
-| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/core.py` 的 `create_llm()` 加分支 |
+| 模型 | `ChatOpenAI` 直连 DeepSeek / mock | `BaseChatModel` | LiteLLM 网关 / vLLM | `infrastructure/llm.py` 的 `create_llm()` 加分支 |
 | 记忆 | `InMemorySaver`（进程内存） | `BaseCheckpointSaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 检索 | 关键词命中 + 标题加权 | `BaseRetriever` | pgvector + 混合检索 + 重排 | `.env: RETRIEVER=pgvector` |
 | 工单存储 | JSON 文件 | 同名方法 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |

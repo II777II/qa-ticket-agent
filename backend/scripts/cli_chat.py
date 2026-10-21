@@ -15,14 +15,16 @@ import argparse
 import asyncio
 import sys
 
-from backend.application.core import (
+from backend.application.agent import (
     EVENT_CITATION,
     EVENT_DONE,
     EVENT_ERROR,
     EVENT_START,
-    EVENT_TOKEN, AgentRuntime, ChatService, create_runtime,
+    EVENT_TOKEN,
 )
-from backend.infrastructure.core import settings
+from backend.application.chat import ChatService
+from backend.application.runtime import AgentRuntime, create_runtime
+from backend.infrastructure.config import settings
 
 
 def _ensure_utf8_stdio() -> None:

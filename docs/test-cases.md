@@ -54,7 +54,7 @@ python -m pytest backend/tests/test_store.py   # 只跑某一块
 | G-08 | 检索异常降级 | 注入会抛异常的检索器 | 仍返回回答，`retrieved == []`，不抛错 |
 | G-09 | 会话隔离 | 两个 thread_id 各问一轮 | 各自消息累积，互不串味 |
 | G-10 | LangGraph custom 事件 | 直接订阅 `stream_mode="custom"` 执行维修分支 | 收到且只收到一条 `service_draft`，事件载荷含维修槽位 |
-| G-12 | 共享事件契约 | 从 `application/core.py` 导入 EVENT_* | Agent、Chat、API 与 CLI 使用同一组常量 |
+| G-12 | 共享事件契约 | 从 `application/agent.py` 导入 EVENT_* | Agent、Chat、API 与 CLI 使用同一组常量 |
 | G-13 | 姓名查询禁止 | 输入「查看张三订单」 | 不进入订单工具、不返回订单 |
 | G-14 | user_id 查询 | 输入「我要用户 10019 的订单」 | 进入 order_query，返回朱一订单且不检索知识库 |
 

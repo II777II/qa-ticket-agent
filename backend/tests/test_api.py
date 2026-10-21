@@ -8,11 +8,11 @@ import json
 import httpx
 import pytest
 
-import backend.api.core as api_core
+import backend.api.routes as api_routes
 from backend.api.app import app as api_app
-from backend.api.core import router
-from backend.application.core import AgentRuntime
-from backend.infrastructure.core import FakeChatModel
+from backend.api.routes import router
+from backend.application.runtime import AgentRuntime
+from backend.infrastructure.llm import FakeChatModel
 
 
 def _client() -> httpx.AsyncClient:
@@ -90,7 +90,7 @@ def test_llm_configuration_keeps_key_in_memory(
         captured.update(kwargs)
         return FakeChatModel()
 
-    monkeypatch.setattr(api_core, "create_llm", fake_create_llm)
+    monkeypatch.setattr(api_routes, "create_llm", fake_create_llm)
     _prepare(isolated_runtime)
     response = asyncio.run(_post_json(
         "/api/llm/config",

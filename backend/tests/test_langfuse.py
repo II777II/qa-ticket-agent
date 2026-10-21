@@ -5,8 +5,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from backend.application.core import ChatService
-from backend.infrastructure.core import LangfuseTracing, create_langfuse_tracing
+from backend.application.chat import ChatService
+from backend.infrastructure.observability import LangfuseTracing, create_langfuse_tracing
 
 
 def _config(**overrides):

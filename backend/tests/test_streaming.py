@@ -6,7 +6,8 @@ import asyncio
 import json
 from typing import AsyncIterator
 
-from backend.api.core import ChatRequest, stream_events
+from backend.api.routes import stream_events
+from backend.api.schemas import ChatRequest
 
 
 class BrokenChatService:

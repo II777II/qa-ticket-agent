@@ -9,8 +9,10 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from backend.application.core import build_graph, route_by_intent
-from backend.infrastructure.core import FakeChatModel, InMemoryRetriever, JsonTicketStore, create_order_store
+from backend.application.agent import build_graph, route_by_intent
+from backend.infrastructure.llm import FakeChatModel
+from backend.infrastructure.retrieval import InMemoryRetriever
+from backend.infrastructure.storage import JsonTicketStore, create_order_store
 
 
 def _build(store: JsonTicketStore, retriever=None):

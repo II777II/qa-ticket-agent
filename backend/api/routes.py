@@ -1,47 +1,25 @@
-"""FastAPI application, schemas, routes and SSE encoding."""
+"""HTTP and SSE routes."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-from contextlib import asynccontextmanager
-from typing import AsyncIterator, Literal
+from typing import AsyncIterator
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import EventSourceResponse, FileResponse
 from fastapi.sse import ServerSentEvent
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, SecretStr
 
-from backend.application.core import AgentRuntime, ChatService, create_runtime
-from backend.domain.core import ORDER_NO_RE, ServiceType, TicketCategory, TicketCreate, TicketPriority
-from backend.infrastructure.core import LLM_MODELS, create_llm, git_version, settings, setup_logging
+from backend.api.schemas import ChatRequest, LlmConfigRequest, ServiceConfirmRequest
+from backend.application.chat import ChatService
+from backend.application.runtime import AgentRuntime
+from backend.domain.core import ORDER_NO_RE, TicketCreate
+from backend.infrastructure.config import LLM_MODELS, git_version, settings
+from backend.infrastructure.llm import create_llm
 
 logger = logging.getLogger("qa_ticket.api")
 router = APIRouter()
-
-
-class ChatRequest(BaseModel):
-    message: str = Field(min_length=1)
-    thread_id: str = "default"
-
-
-class ServiceConfirmRequest(BaseModel):
-    order_no: str = Field(pattern=r"^SO\d{12}$")
-    contact: str = Field(min_length=2, max_length=120)
-    service_type: ServiceType
-    category: TicketCategory
-    priority: TicketPriority = "中"
-    description: str = Field(min_length=10, max_length=2000)
-
-
-class LlmConfigRequest(BaseModel):
-    provider: Literal["mock", "deepseek", "openai"]
-    api_key: SecretStr | None = None
-    model: str = Field(default="", max_length=120)
-    base_url: str = Field(default="", max_length=300)
 
 
 def get_runtime(request: Request) -> AgentRuntime:
@@ -52,7 +30,11 @@ def get_chat(request: Request) -> ChatService:
     return ChatService(get_runtime(request))
 
 
-async def stream_events(chat: ChatService, req: ChatRequest, requested_intent=None) -> AsyncIterator[ServerSentEvent]:
+async def stream_events(
+    chat: ChatService,
+    req: ChatRequest,
+    requested_intent=None,
+) -> AsyncIterator[ServerSentEvent]:
     try:
         async for event, payload in chat.stream(req.message, req.thread_id, requested_intent=requested_intent):
             yield ServerSentEvent(event=event, raw_data=json.dumps(payload, ensure_ascii=False))
@@ -72,8 +54,11 @@ def _chat_endpoint(intent=None):
 router.add_api_route("/chat", _chat_endpoint(), methods=["POST"], tags=["chat"], response_class=EventSourceResponse)
 for _intent in ("read", "write", "human"):
     router.add_api_route(
-        f"/branch/{_intent}", _chat_endpoint(_intent), methods=["POST"],
-        tags=["intent-branches"], response_class=EventSourceResponse,
+        f"/branch/{_intent}",
+        _chat_endpoint(_intent),
+        methods=["POST"],
+        tags=["intent-branches"],
+        response_class=EventSourceResponse,
     )
 
 
@@ -83,10 +68,16 @@ async def confirm_service(req: ServiceConfirmRequest, runtime: AgentRuntime = De
         raise HTTPException(status_code=404, detail=f"订单不存在: {req.order_no}")
     record, duplicated = runtime.tickets.create(TicketCreate(
         title=f"{req.service_type}办理 · {req.order_no}",
-        description=req.description, category=req.category, priority=req.priority, contact=req.contact,
+        description=req.description,
+        category=req.category,
+        priority=req.priority,
+        contact=req.contact,
     ))
     return {
-        "ok": True, "ticket_id": record.id, "status": record.status, "duplicated": duplicated,
+        "ok": True,
+        "ticket_id": record.id,
+        "status": record.status,
+        "duplicated": duplicated,
         "message": "已提交" if not duplicated else "已存在相同业务，复用原单",
     }
 
@@ -94,15 +85,21 @@ async def confirm_service(req: ServiceConfirmRequest, runtime: AgentRuntime = De
 @router.get("/health", tags=["system"])
 async def health(runtime: AgentRuntime = Depends(get_runtime)):
     info = runtime.describe()
-    return {key: info[key] for key in ("provider", "mock", "checkpointer", "retriever", "ticket_store")} | {"status": "ok"}
+    return {
+        key: info[key]
+        for key in ("provider", "mock", "checkpointer", "retriever", "ticket_store")
+    } | {"status": "ok"}
 
 
 @router.get("/api/agent-info", tags=["system"])
 async def agent_info(runtime: AgentRuntime = Depends(get_runtime)):
     version = git_version()
     return runtime.describe() | {
-        "status": "ok", "rag_top_k": settings.rag_top_k, "git_sha": version["sha"],
-        "git_date": version["date"], "extensions": ["compose:docker/docker-compose.yml"],
+        "status": "ok",
+        "rag_top_k": settings.rag_top_k,
+        "git_sha": version["sha"],
+        "git_date": version["date"],
+        "extensions": ["compose:docker/docker-compose.yml"],
     }
 
 
@@ -122,8 +119,12 @@ async def configure_llm(req: LlmConfigRequest, runtime: AgentRuntime = Depends(g
 
 
 @router.get("/api/orders", tags=["orders"])
-async def orders(order_no: str = "", user_id: int | None = None,
-                 limit: int = 20, runtime: AgentRuntime = Depends(get_runtime)):
+async def orders(
+    order_no: str = "",
+    user_id: int | None = None,
+    limit: int = 20,
+    runtime: AgentRuntime = Depends(get_runtime),
+):
     order_no = order_no.strip().upper()
     if order_no:
         if not ORDER_NO_RE.fullmatch(order_no):
@@ -141,8 +142,12 @@ async def categories(runtime: AgentRuntime = Depends(get_runtime)):
 
 
 @router.get("/api/kb/articles", tags=["knowledge"])
-async def articles(q: str = "", category: str = "", limit: int = 50,
-                   runtime: AgentRuntime = Depends(get_runtime)):
+async def articles(
+    q: str = "",
+    category: str = "",
+    limit: int = 50,
+    runtime: AgentRuntime = Depends(get_runtime),
+):
     return runtime.knowledge.search(q=q, category=category, limit=limit)
 
 
@@ -152,10 +157,12 @@ async def kb_search(q: str, top_k: int = 5, runtime: AgentRuntime = Depends(get_
         return []
     documents = runtime.retriever.search(q, top_k=top_k)
     return [{
-        "index": int(d.metadata.get("index", i)), "source": str(d.metadata.get("source", "")),
-        "title": str(d.metadata.get("title", "")), "snippet": d.page_content.strip()[:200],
-        "score": d.metadata.get("score"),
-    } for i, d in enumerate(documents, 1)]
+        "index": int(document.metadata.get("index", index)),
+        "source": str(document.metadata.get("source", "")),
+        "title": str(document.metadata.get("title", "")),
+        "snippet": document.page_content.strip()[:200],
+        "score": document.metadata.get("score"),
+    } for index, document in enumerate(documents, 1)]
 
 
 @router.get("/api/metrics/summary", tags=["metrics"])
@@ -174,39 +181,9 @@ async def root():
     if index.is_file():
         return FileResponse(index)
     return {
-        "name": "qa-ticket-agent", "docs": "/docs", "health": "/health", "chat": "POST /chat",
-        "branches": {x: f"POST /branch/{x}" for x in ("read", "write", "human")},
+        "name": "qa-ticket-agent",
+        "docs": "/docs",
+        "health": "/health",
+        "chat": "POST /chat",
+        "branches": {name: f"POST /branch/{name}" for name in ("read", "write", "human")},
     }
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    app.state.runtime = create_runtime()
-    logger.info("后端就绪: http://%s:%s/docs", settings.host, settings.port)
-    try:
-        yield
-    finally:
-        app.state.runtime.shutdown()
-        app.state.runtime = None
-
-
-def create_app() -> FastAPI:
-    setup_logging()
-    app = FastAPI(
-        title="电商智能助手 POC",
-        description="自然语言提问 -> read / write / human 三路；read 内确定性调用知识库或订单工具。",
-        version="0.1.0", lifespan=lifespan,
-    )
-    app.add_middleware(
-        CORSMiddleware, allow_origins=list(settings.cors_origins), allow_credentials=True,
-        allow_methods=["*"], allow_headers=["*"],
-    )
-    app.include_router(router)
-    if (settings.frontend_dist / "assets").is_dir():
-        app.mount("/assets", StaticFiles(directory=settings.frontend_dist / "assets"), name="assets")
-    if settings.kb_root.is_dir():
-        app.mount("/kb", StaticFiles(directory=settings.kb_root), name="kb")
-    return app
-
-
-app = create_app()

@@ -196,7 +196,7 @@ python -m backend.scripts.generate_ecommerce_demo
 数据说明见 [docs/ecommerce-demo-data.md](docs/ecommerce-demo-data.md)；Postgres 目标结构见
 [docs/sql/postgres_schema.sql](docs/sql/postgres_schema.sql)（订单 8 表 + 知识库 7 表）。
 
-检索实现（[backend/infrastructure/core.py](backend/infrastructure/core.py)）刻意做成零依赖、可解释：
+检索实现（[backend/infrastructure/retrieval.py](backend/infrastructure/retrieval.py)）刻意做成零依赖、可解释：
 
 1. HTML 按 `<h2>` 切块并去掉标签，忽略 `index.html` 和其他文件格式；
 2. 查询与片段都按「英文单词 + 中文二元组」切词；
@@ -215,10 +215,9 @@ python -m backend.scripts.generate_ecommerce_demo
 ```
 backend/
   domain/core.py       领域模型、意图规则、槽位、订单摘要与工单规则
-  application/core.py  LangGraph 三路编排、read 工具分派、ChatService、运行时装配
-  infrastructure/core.py  配置、JSON 仓储、RAG、LLM、指标与 Langfuse
-  api/core.py          请求模型、全部 HTTP/SSE 路由、FastAPI 与静态托管
-  api/app.py           ASGI 入口（backend.api.app:app）
+  application/         agent.py（三路图与工具）、chat.py（对话用例）、runtime.py（运行装配）
+  infrastructure/      config.py、storage.py、retrieval.py、llm.py、observability.py
+  api/                 app.py（FastAPI 组装）、routes.py（HTTP/SSE）、schemas.py（请求模型）
   scripts/cli_chat.py  命令行验收
   scripts/draw_graph.py 导出 LangGraph 结构图（ASCII / Mermaid / PNG）
   data/tickets.json    工单落盘位置（自动生成，不进版本库）
@@ -233,7 +232,7 @@ frontend/
                        / KpiCard / VersionBadge / SiteSidebar
   src/hooks/           useChat（流式与会话恢复）、useConversations（localStorage 历史）
   src/api/agent.ts     API 层：streamChat() 手写 SSE 解析 + 工单/知识库/指标查询
-  src/types.ts         与后端 api/core.py 请求响应模型对应的类型
+  src/types.ts         与后端 api/schemas.py 请求响应模型对应的类型
 docs/
   architecture.md      架构图、执行路径、SSE 事件表、扩展点与生产替换
   demo-script.md       3 分钟演示分镜、准备清单、兜底预案
@@ -247,7 +246,7 @@ docker/                compose 升级落点（POC 不启用）
 
 ```text
 app
-└── api/core.py router
+└── api/routes.py router
     ├── POST /chat
     ├── POST /branch/read
     ├── POST /branch/write
@@ -274,8 +273,8 @@ app
 | `MemorySaver` | `PostgresSaver` | `.env: CHECKPOINTER=postgres` |
 | 进程内检索 | pgvector / Qdrant | `.env: RETRIEVER=pgvector` |
 | JSON 工单文件 | Postgres 工单表 | `.env: TICKET_STORE=postgres` |
-| 直连模型 | LiteLLM 网关 | `infrastructure/core.py` 的 `create_llm()` 加分支 |
-| 日志 | 手写 `Handler` + 存在性判断 | `infrastructure/core.py` 的 `setup_logging()` |
+| 直连模型 | LiteLLM 网关 | `infrastructure/llm.py` 的 `create_llm()` 加分支 |
+| 日志 | 手写 `Handler` + 存在性判断 | `infrastructure/config.py` 的 `setup_logging()` |
 | 单进程 | Docker Compose | 打开 `docker/docker-compose.yml` 注释块 |
 
 关于日志这条，升级时要带两个保护：`if logger.handlers: return`——判断的是**要挂 handler 的那个 logger**，不是 root（`basicConfig` 恰好判 root，所以 root 一旦被 uvicorn / pytest 配过，它会静默失效）；命名 logger 自己挂了 handler 之后要设 `propagate = False`，否则 root 上的 handler 会把同一条日志再打一遍。配置要分开发/生产两套时，`dictConfig` + `disable_existing_loggers: False` 比手写更好维护。

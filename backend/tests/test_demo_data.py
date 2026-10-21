@@ -6,7 +6,7 @@ import json
 from html.parser import HTMLParser
 from pathlib import Path
 
-from backend.infrastructure.core import settings
+from backend.infrastructure.config import settings
 
 
 class _TitleParser(HTMLParser):

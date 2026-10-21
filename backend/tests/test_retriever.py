@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from backend.infrastructure.core import (
+from backend.infrastructure.config import settings
+from backend.infrastructure.retrieval import (
     CONTEXT_FOOTER,
     CONTEXT_HEADER,
     InMemoryRetriever,
     _split_sections,
     format_context,
-    settings,
 )
 
 

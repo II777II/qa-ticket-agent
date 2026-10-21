@@ -27,11 +27,15 @@ os.environ["TICKET_STORE"] = "json"
 os.environ["DATA_DIR"] = tempfile.mkdtemp(prefix="qa-ticket-test-")
 os.environ["LANGFUSE_ENABLED"] = "false"
 
-from backend.application.core import AgentRuntime, build_graph, create_runtime  # noqa: E402
+from backend.application.agent import build_graph  # noqa: E402
+from backend.application.runtime import AgentRuntime, create_runtime  # noqa: E402
 from backend.domain.core import TicketCreate  # noqa: E402
-from backend.infrastructure.core import (  # noqa: E402
-    FakeChatModel, InMemoryRetriever, JsonTicketStore, MetricsCollector, create_knowledge_catalog,
-    create_order_store, settings,
+from backend.infrastructure.config import settings  # noqa: E402
+from backend.infrastructure.llm import FakeChatModel  # noqa: E402
+from backend.infrastructure.observability import MetricsCollector  # noqa: E402
+from backend.infrastructure.retrieval import InMemoryRetriever  # noqa: E402
+from backend.infrastructure.storage import (  # noqa: E402
+    JsonTicketStore, create_knowledge_catalog, create_order_store,
 )
 
 

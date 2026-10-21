@@ -54,7 +54,7 @@ python -m backend.scripts.generate_ecommerce_demo
 ## 切 Postgres（后续）
 
 1. 按 `docs/sql/postgres_schema.sql` 建 15 张表（订单 8 + 知识库 7）；
-2. 在 `infrastructure/core.py` 增加与 `JsonOrderStore` 同方法的 PostgreSQL 仓储；
+2. 在 `infrastructure/storage.py` 增加与 `JsonOrderStore` 同方法的 PostgreSQL 仓储；
 3. `.env` 设置 `ORDER_STORE=postgres`，订单查询接口与页面不用改；
 4. 知识库正文入库到 `kb_article_content.content`，纯文本写 `content_text`；
 5. 导入脚本把 `tables/*.json` 映射到同名表，`kb/articles.json` + 页面内容写入 `kb_article` / `kb_article_content`。
